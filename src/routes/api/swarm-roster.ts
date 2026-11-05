@@ -15,7 +15,7 @@ export const Route = createFileRoute('/api/swarm-roster')({
         return json({
           ok: true,
           path: SWARM_ROSTER_PATH,
-          roster: readSwarmRoster(ids),
+          roster: { ...readSwarmRoster(ids), workers: readSwarmRoster(ids).workers.filter((worker) => ids.includes(worker.id)) },
           fetchedAt: Date.now(),
         })
       },
@@ -32,7 +32,8 @@ export const Route = createFileRoute('/api/swarm-roster')({
         try {
           const ids = listSwarmWorkerIds()
           const roster = upsertSwarmRosterWorker(body as never, ids)
-          return json({ ok: true, path: SWARM_ROSTER_PATH, roster, savedAt: Date.now() })
+          const visible = listSwarmWorkerIds()
+          return json({ ok: true, path: SWARM_ROSTER_PATH, roster: { ...roster, workers: roster.workers.filter((worker) => visible.includes(worker.id)) }, savedAt: Date.now() })
         } catch (error) {
           return json({
             ok: false,

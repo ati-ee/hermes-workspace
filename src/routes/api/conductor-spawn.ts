@@ -7,18 +7,20 @@ import { isAuthenticated } from '../../server/auth-middleware'
 import { requireJsonContentType } from '../../server/rate-limit'
 import { dashboardFetch, ensureGatewayProbed } from '../../server/gateway-capabilities'
 import { sanitizeConductorMissionGoal } from '../../server/conductor-mission-sanitize'
-import { getSwarmMission, recordMissionCheckpoint  } from '../../server/swarm-missions'
+import { getSwarmMission, listSwarmMissions, recordMissionCheckpoint  } from '../../server/swarm-missions'
 import { getSwarmProfilePath } from '../../server/swarm-foundation'
 import { readWorkerMessages } from '../../server/swarm-chat-reader'
 import { newestCheckpointFromMessages } from '../../server/swarm-checkpoints'
+import { SwarmDispatchError, refreshNativeMission } from '../../server/swarm-native'
 import { checkpointFromRuntimeSnapshot, dispatchSwarmAssignments, readRuntimeCheckpointSnapshot, runtimeCheckpointSignature } from './swarm-dispatch'
 import type { SwarmMission } from '../../server/swarm-missions'
 
 let cachedSkill: string | null = null
 
-export const NATIVE_CONDUCTOR_MODE_NOTE = 'Native-swarm is the official Workspace-native Swarm fallback when the dashboard Conductor API is unavailable.'
+export const NATIVE_CONDUCTOR_MODE_NOTE = 'Workspace native adapter using supported Hermes gateway RPC, not a dashboard Conductor managed run. Live delivery and independent acceptance are separate gates.'
 
 type ConductorSpawnBody = {
+  origin?: unknown
   goal?: unknown
   orchestratorModel?: unknown
   workerModel?: unknown
@@ -145,130 +147,29 @@ function clipText(value: string, max = 8000): string {
 }
 
 export function buildNativeConductorAssignments(goal: string, options: { maxParallel: number; supervised: boolean }): Array<NativeConductorAssignment> {
-  const maxParallel = Math.min(5, Math.max(1, options.maxParallel || 1))
-  const normalizedGoal = goal.toLowerCase()
-  const wantsOps = /production|ready|harden|audit|clean|fix|bug|test|build|release|deploy|operational|runtime|gateway|tmux|service|health/.test(normalizedGoal)
-  const wantsDocs = /doc|handoff|readme|spec|plan|summary|knowledge|note/.test(normalizedGoal)
-  const assignments: Array<NativeConductorAssignment> = []
-
-  const pushUnique = (assignment: NativeConductorAssignment) => {
-    if (!assignments.some((existing) => existing.workerId === assignment.workerId)) assignments.push(assignment)
-  }
-
-  pushUnique({
-    workerId: wantsOps ? 'ops-watch' : 'builder',
-    rationale: wantsOps ? 'Ops Watch owns runtime health, service quality, and production blockers.' : 'Builder owns scoped implementation and concrete progress.',
-    reviewRequired: false,
+  // Parallelism is a limit, not authority to dispatch specialists or archived templates.
+  return [{
+    workerId: 'orchestrator-argus',
+    rationale: 'The existing ARGUS Orchestrator is the sole specialist dispatcher.',
+    reviewRequired: true,
     direct: true,
     task: [
       `Conductor mission: ${goal}`,
-      '',
-      wantsOps ? 'Lane: Ops Watch / runtime quality.' : 'Lane: Builder / primary implementation.',
-      wantsOps
-        ? 'Diagnose the runtime path, make the smallest safe operational improvement, and return proof. Avoid destructive changes unless explicitly approved.'
-        : 'Find the smallest safe execution plan, make concrete progress, and produce a checkpoint. If code changes are required, keep them scoped and testable.',
-      options.supervised ? 'Supervised mode: stop before destructive writes or commits and report the exact approval needed.' : 'Do not ask for confirmation unless blocked; start immediately.',
+      'Use existing configured ARGUS profiles only. Preserve saved provider/model settings and all attended once/deny approvals.',
+      'Do not broadcast, create bots/profiles, or start/restart a gateway. Keep other workstreams untouched.',
+      `Requested parallelism limit: ${options.maxParallel}. Specialist order remains operator-controlled.`,
+      'Require independent review of the exact frozen commit/artifact before reporting mission acceptance.',
     ].join('\n'),
-  })
-
-  if (maxParallel >= 2) {
-    pushUnique({
-      workerId: wantsOps ? 'builder' : 'reviewer',
-      rationale: wantsOps
-        ? 'Builder executes implementation or patch work in parallel with runtime analysis.'
-        : 'Reviewer provides the second-lane quality gate for implementation work.',
-      reviewRequired: false,
-      direct: true,
-      task: [
-        `Conductor mission: ${goal}`,
-        '',
-        wantsOps ? 'Lane: Builder.' : 'Lane: Reviewer / quality gate.',
-        wantsOps
-          ? 'Implement or prototype the concrete fix/feature path. Avoid broad refactors. Report files changed, tests run, and remaining risks.'
-          : 'Review the execution path and any changes. Look for regressions, missing tests, unsafe assumptions, and production-readiness gaps.',
-        options.supervised ? 'Supervised mode: prepare patches but stop before destructive writes or commits if approval is needed.' : 'Proceed without asking unless blocked.',
-      ].join('\n'),
-    })
-  }
-
-  if (maxParallel >= 3) {
-    pushUnique({
-      workerId: wantsOps ? 'reviewer' : 'qa',
-      rationale: wantsOps
-        ? 'Reviewer independently checks correctness, regressions, and merge risk.'
-        : 'QA validates user-visible behavior with focused smoke checks.',
-      reviewRequired: false,
-      direct: true,
-      task: [
-        `Conductor mission: ${goal}`,
-        '',
-        wantsOps ? 'Lane: Reviewer / quality gate.' : 'Lane: QA.',
-        wantsOps
-          ? 'Review the implementation plan and any changes from Ops/Builder. Look for regressions, missing tests, unsafe assumptions, and production-readiness gaps. Do not make broad edits unless needed to unblock correctness.'
-          : 'Run or design focused verification. Prefer targeted tests/build/smoke checks. Report exact commands and results. If tests are missing, identify the minimal regression coverage needed.',
-      ].join('\n'),
-    })
-  }
-
-  if (maxParallel >= 4) {
-    pushUnique({
-      workerId: wantsOps ? 'qa' : 'ops-watch',
-      rationale: wantsOps
-        ? 'QA validates behavior with targeted tests and smoke checks.'
-        : 'Ops Watch checks runtime/service risks for implementation missions.',
-      reviewRequired: false,
-      direct: true,
-      task: [
-        `Conductor mission: ${goal}`,
-        '',
-        wantsOps ? 'Lane: QA.' : 'Lane: Ops Watch / runtime quality.',
-        wantsOps
-          ? 'Run or design focused verification. Prefer targeted tests/build/smoke checks. Report exact commands and results. If tests are missing, identify the minimal regression coverage needed.'
-          : 'Check runtime, service, deployment, and operational risk. Report only concrete blockers, verification gaps, and safe next actions.',
-      ].join('\n'),
-    })
-  }
-
-  if (maxParallel >= 5 || wantsDocs) {
-    pushUnique({
-      workerId: 'km-agent',
-      rationale: 'KM Agent captures handoff, docs, and durable knowledge notes without leaking secrets.',
-      reviewRequired: false,
-      direct: true,
-      task: [
-        `Conductor mission: ${goal}`,
-        '',
-        'Lane: KM Agent / handoff and knowledge hygiene.',
-        'Create a concise handoff/status note: what changed, how to operate it, verification, caveats, and next actions. Do not expose secrets.',
-        options.supervised ? 'Supervised mode: stop before destructive writes or commits and report the exact approval needed.' : 'Proceed without asking unless blocked.',
-      ].join('\n'),
-    })
-  }
-
-  const selected = assignments.slice(0, maxParallel)
-  if (wantsDocs && !selected.some((assignment) => assignment.workerId === 'km-agent')) {
-    selected[selected.length - 1] = {
-      workerId: 'km-agent',
-      rationale: 'KM Agent captures handoff, docs, and durable knowledge notes without leaking secrets.',
-      reviewRequired: false,
-      direct: true,
-      task: [
-        `Conductor mission: ${goal}`,
-        '',
-        'Lane: KM Agent / handoff and knowledge hygiene.',
-        'Create a concise handoff/status note: what changed, how to operate it, verification, caveats, and next actions. Do not expose secrets.',
-        options.supervised ? 'Supervised mode: stop before destructive writes or commits and report the exact approval needed.' : 'Proceed without asking unless blocked.',
-      ].join('\n'),
-    }
-  }
-
-  return selected
+  }]
 }
 
 function swarmMissionStatus(mission: SwarmMission): string {
   if (mission.state === 'cancelled') return 'cancelled'
   if (mission.state === 'complete') return 'completed'
-  if (mission.state === 'blocked') return 'failed'
+  if (mission.state === 'blocked' && mission.assignments.some((assignment) => assignment.state === 'needs_input')) return 'waiting'
+  if (mission.state === 'blocked') return 'blocked'
+  if (mission.state === 'planning' || mission.state === 'dispatching') return 'queued'
+  if (mission.state === 'reviewing') return 'reviewing'
   return 'running'
 }
 
@@ -288,6 +189,7 @@ function nativeMissionLines(mission: SwarmMission, maxLines: number): Array<stri
 }
 
 export function toNativeConductorMissionRecord(mission: SwarmMission, maxLines = 400) {
+  const completedAt = Math.max(0, ...mission.assignments.map((assignment) => assignment.completedAt ?? 0)) || null
   return {
     id: mission.id,
     name: mission.title,
@@ -297,14 +199,19 @@ export function toNativeConductorMissionRecord(mission: SwarmMission, maxLines =
     lines: nativeMissionLines(mission, maxLines),
     exit_code: mission.state === 'blocked' || mission.state === 'cancelled' ? 1 : mission.state === 'complete' ? 0 : null,
     nativeSwarm: true,
-    modeOfficialOotb: true,
+    modeOfficialOotb: false,
     modeNote: NATIVE_CONDUCTOR_MODE_NOTE,
-    assignments: mission.assignments,
+    assignments: mission.assignments.map((assignment) => ({ ...assignment, native: assignment.native ? { ...assignment.native, report: undefined } : undefined })),
+    reports: mission.assignments.flatMap((assignment) => assignment.native?.report ? [{ assignmentId: assignment.id, workerId: assignment.workerId, deliveryKind: assignment.deliveryKind ?? 'unknown', assignmentState: assignment.state, nativeStatus: assignment.native.status, nativeOutcome: assignment.native.outcome ?? null, report: assignment.native.report }] : []),
+    completionKind: mission.state === 'complete' && mission.assignments.every((assignment) => assignment.deliveryKind === 'report') ? 'report-only' : null,
+    completedAt,
     updatedAt: mission.updatedAt,
+    createdAt: mission.createdAt,
   }
 }
 
-function createNativeConductorMission(input: {
+async function createNativeConductorMission(input: {
+  origin?: unknown
   goal: string
   missionName: string
   maxParallel: number
@@ -315,7 +222,8 @@ function createNativeConductorMission(input: {
     supervised: input.supervised,
   })
   const missionTitle = `Conductor: ${clipText(input.goal, 120)}`
-  void dispatchSwarmAssignments({
+  const dispatched = await dispatchSwarmAssignments({
+    origin: input.origin,
     assignments,
     missionId: input.missionName,
     missionTitle,
@@ -324,10 +232,8 @@ function createNativeConductorMission(input: {
     timeoutSeconds: 600,
     checkpointPollSeconds: 10,
     notifySessionKey: 'main',
-  }).catch((error) => {
-    console.error('[conductor] native swarm dispatch failed:', error instanceof Error ? error.message : String(error))
   })
-  return { missionId: input.missionName, missionTitle, assignments }
+  return { missionId: input.missionName, missionTitle, assignments: dispatched.assignments, results: dispatched.results }
 }
 
 export const Route = createFileRoute('/api/conductor-spawn')({
@@ -336,6 +242,16 @@ export const Route = createFileRoute('/api/conductor-spawn')({
       GET: async ({ request }) => {
         if (!isAuthenticated(request)) return json({ ok: false, error: 'Unauthorized' }, { status: 401 })
         const url = new URL(request.url)
+        if (url.searchParams.get('history') === '1') {
+          // Metadata only; selecting an exact history item refetches its authenticated
+          // result. Never inspect unrelated native jobs or download all report bodies.
+          const missions = listSwarmMissions(50).filter((mission) => mission.executionMode === 'native').map((mission) => ({
+            id: mission.id, name: mission.title, nativeSwarm: true, status: swarmMissionStatus(mission), createdAt: mission.createdAt, updatedAt: mission.updatedAt,
+            completedAt: Math.max(0, ...mission.assignments.map((assignment) => assignment.completedAt ?? 0)) || null,
+            completionKind: mission.state === 'complete' && mission.assignments.every((assignment) => assignment.deliveryKind === 'report') ? 'report-only' : null,
+          }))
+          return json({ ok: true, missions })
+        }
         const missionId = url.searchParams.get('missionId')?.trim()
         const requestedLines = Number(url.searchParams.get('lines') || '200')
         const lines = Number.isFinite(requestedLines) ? Math.min(2000, Math.max(1, requestedLines)) : 200
@@ -343,49 +259,7 @@ export const Route = createFileRoute('/api/conductor-spawn')({
 
         const nativeMission = getSwarmMission(missionId)
         if (nativeMission) {
-          // For active native missions, check worker runtime.json for fresh
-          // checkpoints that haven't been written back to the mission store yet.
-          // This bridges the gap between fire-and-forget dispatch (waitForCheckpoint=false)
-          // and the conductor UI polling for live status.
-          if (nativeMission.state === 'executing') {
-            for (const assignment of nativeMission.assignments) {
-              if (assignment.state === 'dispatched' && assignment.workerId) {
-                try {
-                  const profilePath = getSwarmProfilePath(assignment.workerId)
-                  // Check runtime.json first
-                  const snapshot = readRuntimeCheckpointSnapshot(profilePath)
-                  let checkpoint = checkpointFromRuntimeSnapshot(snapshot)
-
-                  // Also check the worker's chat SQLite DB for checkpoint messages
-                  // (tmux workers write checkpoints there)
-                  if (!checkpoint || checkpoint.stateLabel === 'IN_PROGRESS') {
-                    const chat = readWorkerMessages(profilePath, 50)
-                    if (chat.ok) {
-                      const msgCheckpoint = newestCheckpointFromMessages(chat.messages)
-                      if (msgCheckpoint && msgCheckpoint.raw !== snapshot.checkpointRaw) {
-                        checkpoint = msgCheckpoint
-                      }
-                    }
-                  }
-
-                  if (checkpoint && (checkpoint.stateLabel === 'DONE' || checkpoint.stateLabel === 'BLOCKED' || checkpoint.stateLabel === 'HANDOFF' || checkpoint.stateLabel === 'NEEDS_INPUT')) {
-                    recordMissionCheckpoint({
-                      missionId: nativeMission.id,
-                      assignmentId: assignment.id,
-                      workerId: assignment.workerId,
-                      checkpoint,
-                      source: 'conductor-poll',
-                    })
-                  }
-                } catch {
-                  // runtime.json might not exist yet or be temporarily unreadable
-                }
-              }
-            }
-          }
-          // Re-read the mission from the store so the response reflects any
-          // checkpoints just synced via recordMissionCheckpoint above.
-          const updatedNative = getSwarmMission(missionId) ?? nativeMission
+          const updatedNative = await refreshNativeMission(missionId) ?? nativeMission
           return json({ ok: true, mode: 'native-swarm', mission: toNativeConductorMissionRecord(updatedNative, lines) })
         }
 
@@ -436,57 +310,34 @@ export const Route = createFileRoute('/api/conductor-spawn')({
             )
           }
 
-          const prompt = buildOrchestratorPrompt(goal, loadDispatchSkill(), {
-            orchestratorModel,
-            workerModel,
-            projectsDir,
-            maxParallel,
-            supervised,
-          })
+          if (orchestratorModel || workerModel) return json({ ok: false, error: 'profile_route_override_forbidden; use saved profile settings' }, { status: 400 })
           const missionName = `conductor-${Date.now()}`
-          const capabilities = await ensureGatewayProbed()
-
-          if (!capabilities.dashboard.available || !capabilities.conductor) {
-            const native = createNativeConductorMission({
+          // All new missions use the same constrained path, regardless of dashboard capability.
+            const native = await createNativeConductorMission({
               goal,
               missionName,
+              origin: body.origin,
               maxParallel,
               supervised,
             })
             return json({
               ok: true,
               mode: 'native-swarm',
-              modeOfficialOotb: true,
+              modeOfficialOotb: false,
               modeNote: NATIVE_CONDUCTOR_MODE_NOTE,
               prompt: null,
               missionId: native.missionId,
               sessionKey: null,
               sessionKeyPrefix: null,
-              jobId: native.missionId,
+              jobId: null,
               jobName: native.missionTitle,
               runId: null,
               warnings: goalSanitization.warnings,
               assignments: native.assignments,
-              results: null,
+              results: native.results,
             })
-          }
-
-          const result = await createDashboardConductorMission({ name: missionName, prompt })
-          if (result.error) return json({ ok: false, error: result.error }, { status: 502 })
-          const missionId = result.id ?? missionName
-          return json({
-            ok: true,
-            mode: 'dashboard',
-            prompt: null,
-            missionId,
-            sessionKey: result.sessionKey ?? null,
-            sessionKeyPrefix: (result as Record<string, unknown>).sessionKeyPrefix ?? null,
-            jobId: missionId,
-            jobName: result.name ?? missionName,
-            runId: null,
-            warnings: goalSanitization.warnings,
-          })
         } catch (error) {
+          if (error instanceof SwarmDispatchError) return json({ ok: false, error: error.message, ...(error.status === 401 ? { code: 'dashboard_auth_required', needs_login: true, login_url: '/dashboard-connect' } : {}) }, { status: error.status })
           return json({ ok: false, error: error instanceof Error ? error.message : String(error) }, { status: 500 })
         }
       },

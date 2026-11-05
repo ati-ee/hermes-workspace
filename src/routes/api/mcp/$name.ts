@@ -1,6 +1,7 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { json } from '@tanstack/react-start'
 import { isAuthenticated } from '../../../server/auth-middleware'
+import { dashboardAuthResponse } from '../../../server/dashboard-auth-response'
 import {
   BEARER_TOKEN,
   CLAUDE_API,
@@ -89,6 +90,8 @@ export const Route = createFileRoute('/api/mcp/$name')({
           await saveConfig(patch)
           return json({ ok: true })
         } catch (err) {
+          const auth = dashboardAuthResponse(err)
+          if (auth) return auth
           return json({ ok: false, error: safeErrorMessage(err) }, { status: 500 })
         }
       },

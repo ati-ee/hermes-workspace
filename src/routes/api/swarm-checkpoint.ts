@@ -5,6 +5,7 @@ import { join } from 'node:path'
 import { z } from 'zod'
 import { isAuthenticated } from '../../server/auth-middleware'
 import { getSwarmProfilePath } from '../../server/swarm-foundation'
+import { legacyControlRefusal } from '../../server/swarm-legacy-control'
 import { isSwarmWorkerId } from '../../server/swarm-roster'
 import { appendSwarmMemoryEvent } from '../../server/swarm-memory'
 import { checkpointFromRuntimeSnapshot, readRuntimeCheckpointSnapshot } from './swarm-dispatch'
@@ -96,6 +97,8 @@ export const Route = createFileRoute('/api/swarm-checkpoint')({
         }
         const input = parsed.data
         const workerId = input.workerId
+        const refusal = legacyControlRefusal(workerId)
+        if (refusal) return refusal
 
         const patch: Record<string, unknown> = {
           workerId,

@@ -20,9 +20,10 @@ const { homedir } = vi.hoisted(() => ({
   homedir: vi.fn().mockReturnValue('/home/testuser'),
 }))
 
-const { fetchMock } = vi.hoisted(() => ({
-  fetchMock: vi.fn(),
+const { fetchMock, nativeBearer } = vi.hoisted(() => ({
+  fetchMock: vi.fn(), nativeBearer: vi.fn(),
 }))
+vi.mock('../dashboard-auth-context', () => ({ requestDashboardBearer: nativeBearer }))
 
 vi.mock('node:os', () => ({
   default: { homedir },
@@ -33,6 +34,7 @@ beforeEach(() => {
   vi.clearAllMocks()
   vi.unstubAllGlobals()
   fetchMock.mockReset()
+  nativeBearer.mockReset().mockResolvedValue(null)
   vi.stubGlobal('fetch', fetchMock)
   delete process.env.CLAUDE_HOME
   delete process.env.HERMES_HOME
@@ -45,13 +47,20 @@ beforeEach(() => {
   delete process.env.HOST
 })
 
-afterEach(() => {
+const importProbes: Array<Promise<unknown>> = []
+
+afterEach(async () => {
+  // Drain owning import-triggered probes while the HTTP fixture remains installed.
+  // Restoring fetch early leaked asynchronous probes into the unchanged network guard.
+  await Promise.all(importProbes.splice(0))
   vi.unstubAllGlobals()
 })
 
 async function loadMod() {
   vi.resetModules()
-  return import('../gateway-capabilities')
+  const mod = await import('../gateway-capabilities')
+  importProbes.push(mod.probeGateway())
+  return mod
 }
 
 describe('gateway-capabilities', () => {
@@ -354,5 +363,45 @@ describe('gateway-capabilities', () => {
         mod.setGatewayUrl(null as never)
       }
     })
+  })
+})
+
+describe('request-scoped native Dashboard authentication', () => {
+  it('uses the current request grant without scraping HTML or sharing a global cache', async () => {
+    const mod = await loadMod()
+    nativeBearer.mockResolvedValueOnce('synthetic-native')
+    const before = fetchMock.mock.calls.length
+    expect(await mod.fetchDashboardToken()).toBe('synthetic-native')
+    expect(fetchMock.mock.calls.length).toBe(before)
+    nativeBearer.mockResolvedValue(null)
+    fetchMock.mockResolvedValueOnce(
+      new Response(null, { status: 302, headers: { location: '/login' } }),
+    )
+    expect(await mod.fetchDashboardToken()).toBe('')
+  })
+  it('rejects cross-origin targets before sending credentials', async () => {
+    const mod = await loadMod()
+    const before = fetchMock.mock.calls.length
+    await expect(
+      mod.dashboardFetch('https://other.test/api/sessions'),
+    ).rejects.toMatchObject({ status: 400 })
+    expect(fetchMock.mock.calls.length).toBe(before)
+  })
+  it('refreshes once on API401 and never serializes tokens in its error', async () => {
+    const mod = await loadMod()
+    nativeBearer
+      .mockResolvedValueOnce('synthetic-before')
+      .mockResolvedValueOnce('synthetic-after')
+    fetchMock
+      .mockResolvedValueOnce(new Response(null, { status: 401 }))
+      .mockResolvedValueOnce(new Response(null, { status: 401 }))
+    await expect(mod.dashboardFetch('/api/sessions')).rejects.toMatchObject({
+      status: 401,
+      message: 'Dashboard sign-in required',
+    })
+    expect(nativeBearer.mock.calls.slice(-2).map((c) => c[1])).toEqual([
+      false,
+      true,
+    ])
   })
 })

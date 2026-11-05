@@ -28,6 +28,7 @@ import { Route as HermesWorldRouteImport } from './routes/hermes-world'
 import { Route as FilesRouteImport } from './routes/files'
 import { Route as EchoStudioRouteImport } from './routes/echo-studio'
 import { Route as EarlyAccessRouteImport } from './routes/early-access'
+import { Route as DashboardConnectRouteImport } from './routes/dashboard-connect'
 import { Route as DashboardRouteImport } from './routes/dashboard'
 import { Route as ConductorRouteImport } from './routes/conductor'
 import { Route as AgoraRouteImport } from './routes/agora'
@@ -96,6 +97,7 @@ import { Route as ApiFilesRouteImport } from './routes/api/files'
 import { Route as ApiExternalConversationsRouteImport } from './routes/api/external-conversations'
 import { Route as ApiExternalAgentsRouteImport } from './routes/api/external-agents'
 import { Route as ApiEventsRouteImport } from './routes/api/events'
+import { Route as ApiDashboardAuthRouteImport } from './routes/api/dashboard-auth'
 import { Route as ApiCrewStatusRouteImport } from './routes/api/crew-status'
 import { Route as ApiContextUsageRouteImport } from './routes/api/context-usage'
 import { Route as ApiConnectionStatusRouteImport } from './routes/api/connection-status'
@@ -164,6 +166,8 @@ import { Route as ApiExternalMemoryProvidersRouteImport } from './routes/api/ext
 import { Route as ApiExternalMemoryCandidatesRouteImport } from './routes/api/external-memory/candidates'
 import { Route as ApiExternalConversationsConversationIdRouteImport } from './routes/api/external-conversations.$conversationId'
 import { Route as ApiDashboardOverviewRouteImport } from './routes/api/dashboard/overview'
+import { Route as ApiDashboardAuthLaunchRouteImport } from './routes/api/dashboard-auth.launch'
+import { Route as ApiDashboardAuthCallbackRouteImport } from './routes/api/dashboard-auth.callback'
 import { Route as ApiClaudeTasksTaskIdRouteImport } from './routes/api/claude-tasks.$taskId'
 import { Route as ApiClaudeProxySplatRouteImport } from './routes/api/claude-proxy/$'
 import { Route as ApiClaudeJobsJobIdRouteImport } from './routes/api/claude-jobs.$jobId'
@@ -269,6 +273,11 @@ const EchoStudioRoute = EchoStudioRouteImport.update({
 const EarlyAccessRoute = EarlyAccessRouteImport.update({
   id: '/early-access',
   path: '/early-access',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DashboardConnectRoute = DashboardConnectRouteImport.update({
+  id: '/dashboard-connect',
+  path: '/dashboard-connect',
   getParentRoute: () => rootRouteImport,
 } as any)
 const DashboardRoute = DashboardRouteImport.update({
@@ -611,6 +620,11 @@ const ApiExternalAgentsRoute = ApiExternalAgentsRouteImport.update({
 const ApiEventsRoute = ApiEventsRouteImport.update({
   id: '/api/events',
   path: '/api/events',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiDashboardAuthRoute = ApiDashboardAuthRouteImport.update({
+  id: '/api/dashboard-auth',
+  path: '/api/dashboard-auth',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiCrewStatusRoute = ApiCrewStatusRouteImport.update({
@@ -958,6 +972,17 @@ const ApiDashboardOverviewRoute = ApiDashboardOverviewRouteImport.update({
   path: '/api/dashboard/overview',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiDashboardAuthLaunchRoute = ApiDashboardAuthLaunchRouteImport.update({
+  id: '/launch',
+  path: '/launch',
+  getParentRoute: () => ApiDashboardAuthRoute,
+} as any)
+const ApiDashboardAuthCallbackRoute =
+  ApiDashboardAuthCallbackRouteImport.update({
+    id: '/callback',
+    path: '/callback',
+    getParentRoute: () => ApiDashboardAuthRoute,
+  } as any)
 const ApiClaudeTasksTaskIdRoute = ApiClaudeTasksTaskIdRouteImport.update({
   id: '/$taskId',
   path: '/$taskId',
@@ -1025,6 +1050,7 @@ export interface FileRoutesByFullPath {
   '/agora': typeof AgoraRoute
   '/conductor': typeof ConductorRoute
   '/dashboard': typeof DashboardRoute
+  '/dashboard-connect': typeof DashboardConnectRoute
   '/early-access': typeof EarlyAccessRoute
   '/echo-studio': typeof EchoStudioRoute
   '/files': typeof FilesRoute
@@ -1062,6 +1088,7 @@ export interface FileRoutesByFullPath {
   '/api/connection-status': typeof ApiConnectionStatusRoute
   '/api/context-usage': typeof ApiContextUsageRoute
   '/api/crew-status': typeof ApiCrewStatusRoute
+  '/api/dashboard-auth': typeof ApiDashboardAuthRouteWithChildren
   '/api/events': typeof ApiEventsRoute
   '/api/external-agents': typeof ApiExternalAgentsRoute
   '/api/external-conversations': typeof ApiExternalConversationsRouteWithChildren
@@ -1129,6 +1156,8 @@ export interface FileRoutesByFullPath {
   '/api/claude-jobs/$jobId': typeof ApiClaudeJobsJobIdRoute
   '/api/claude-proxy/$': typeof ApiClaudeProxySplatRoute
   '/api/claude-tasks/$taskId': typeof ApiClaudeTasksTaskIdRoute
+  '/api/dashboard-auth/callback': typeof ApiDashboardAuthCallbackRoute
+  '/api/dashboard-auth/launch': typeof ApiDashboardAuthLaunchRoute
   '/api/dashboard/overview': typeof ApiDashboardOverviewRoute
   '/api/external-conversations/$conversationId': typeof ApiExternalConversationsConversationIdRouteWithChildren
   '/api/external-memory/candidates': typeof ApiExternalMemoryCandidatesRoute
@@ -1193,6 +1222,7 @@ export interface FileRoutesByTo {
   '/agora': typeof AgoraRoute
   '/conductor': typeof ConductorRoute
   '/dashboard': typeof DashboardRoute
+  '/dashboard-connect': typeof DashboardConnectRoute
   '/early-access': typeof EarlyAccessRoute
   '/echo-studio': typeof EchoStudioRoute
   '/files': typeof FilesRoute
@@ -1229,6 +1259,7 @@ export interface FileRoutesByTo {
   '/api/connection-status': typeof ApiConnectionStatusRoute
   '/api/context-usage': typeof ApiContextUsageRoute
   '/api/crew-status': typeof ApiCrewStatusRoute
+  '/api/dashboard-auth': typeof ApiDashboardAuthRouteWithChildren
   '/api/events': typeof ApiEventsRoute
   '/api/external-agents': typeof ApiExternalAgentsRoute
   '/api/external-conversations': typeof ApiExternalConversationsRouteWithChildren
@@ -1296,6 +1327,8 @@ export interface FileRoutesByTo {
   '/api/claude-jobs/$jobId': typeof ApiClaudeJobsJobIdRoute
   '/api/claude-proxy/$': typeof ApiClaudeProxySplatRoute
   '/api/claude-tasks/$taskId': typeof ApiClaudeTasksTaskIdRoute
+  '/api/dashboard-auth/callback': typeof ApiDashboardAuthCallbackRoute
+  '/api/dashboard-auth/launch': typeof ApiDashboardAuthLaunchRoute
   '/api/dashboard/overview': typeof ApiDashboardOverviewRoute
   '/api/external-conversations/$conversationId': typeof ApiExternalConversationsConversationIdRouteWithChildren
   '/api/external-memory/candidates': typeof ApiExternalMemoryCandidatesRoute
@@ -1361,6 +1394,7 @@ export interface FileRoutesById {
   '/agora': typeof AgoraRoute
   '/conductor': typeof ConductorRoute
   '/dashboard': typeof DashboardRoute
+  '/dashboard-connect': typeof DashboardConnectRoute
   '/early-access': typeof EarlyAccessRoute
   '/echo-studio': typeof EchoStudioRoute
   '/files': typeof FilesRoute
@@ -1398,6 +1432,7 @@ export interface FileRoutesById {
   '/api/connection-status': typeof ApiConnectionStatusRoute
   '/api/context-usage': typeof ApiContextUsageRoute
   '/api/crew-status': typeof ApiCrewStatusRoute
+  '/api/dashboard-auth': typeof ApiDashboardAuthRouteWithChildren
   '/api/events': typeof ApiEventsRoute
   '/api/external-agents': typeof ApiExternalAgentsRoute
   '/api/external-conversations': typeof ApiExternalConversationsRouteWithChildren
@@ -1465,6 +1500,8 @@ export interface FileRoutesById {
   '/api/claude-jobs/$jobId': typeof ApiClaudeJobsJobIdRoute
   '/api/claude-proxy/$': typeof ApiClaudeProxySplatRoute
   '/api/claude-tasks/$taskId': typeof ApiClaudeTasksTaskIdRoute
+  '/api/dashboard-auth/callback': typeof ApiDashboardAuthCallbackRoute
+  '/api/dashboard-auth/launch': typeof ApiDashboardAuthLaunchRoute
   '/api/dashboard/overview': typeof ApiDashboardOverviewRoute
   '/api/external-conversations/$conversationId': typeof ApiExternalConversationsConversationIdRouteWithChildren
   '/api/external-memory/candidates': typeof ApiExternalMemoryCandidatesRoute
@@ -1531,6 +1568,7 @@ export interface FileRouteTypes {
     | '/agora'
     | '/conductor'
     | '/dashboard'
+    | '/dashboard-connect'
     | '/early-access'
     | '/echo-studio'
     | '/files'
@@ -1568,6 +1606,7 @@ export interface FileRouteTypes {
     | '/api/connection-status'
     | '/api/context-usage'
     | '/api/crew-status'
+    | '/api/dashboard-auth'
     | '/api/events'
     | '/api/external-agents'
     | '/api/external-conversations'
@@ -1635,6 +1674,8 @@ export interface FileRouteTypes {
     | '/api/claude-jobs/$jobId'
     | '/api/claude-proxy/$'
     | '/api/claude-tasks/$taskId'
+    | '/api/dashboard-auth/callback'
+    | '/api/dashboard-auth/launch'
     | '/api/dashboard/overview'
     | '/api/external-conversations/$conversationId'
     | '/api/external-memory/candidates'
@@ -1699,6 +1740,7 @@ export interface FileRouteTypes {
     | '/agora'
     | '/conductor'
     | '/dashboard'
+    | '/dashboard-connect'
     | '/early-access'
     | '/echo-studio'
     | '/files'
@@ -1735,6 +1777,7 @@ export interface FileRouteTypes {
     | '/api/connection-status'
     | '/api/context-usage'
     | '/api/crew-status'
+    | '/api/dashboard-auth'
     | '/api/events'
     | '/api/external-agents'
     | '/api/external-conversations'
@@ -1802,6 +1845,8 @@ export interface FileRouteTypes {
     | '/api/claude-jobs/$jobId'
     | '/api/claude-proxy/$'
     | '/api/claude-tasks/$taskId'
+    | '/api/dashboard-auth/callback'
+    | '/api/dashboard-auth/launch'
     | '/api/dashboard/overview'
     | '/api/external-conversations/$conversationId'
     | '/api/external-memory/candidates'
@@ -1866,6 +1911,7 @@ export interface FileRouteTypes {
     | '/agora'
     | '/conductor'
     | '/dashboard'
+    | '/dashboard-connect'
     | '/early-access'
     | '/echo-studio'
     | '/files'
@@ -1903,6 +1949,7 @@ export interface FileRouteTypes {
     | '/api/connection-status'
     | '/api/context-usage'
     | '/api/crew-status'
+    | '/api/dashboard-auth'
     | '/api/events'
     | '/api/external-agents'
     | '/api/external-conversations'
@@ -1970,6 +2017,8 @@ export interface FileRouteTypes {
     | '/api/claude-jobs/$jobId'
     | '/api/claude-proxy/$'
     | '/api/claude-tasks/$taskId'
+    | '/api/dashboard-auth/callback'
+    | '/api/dashboard-auth/launch'
     | '/api/dashboard/overview'
     | '/api/external-conversations/$conversationId'
     | '/api/external-memory/candidates'
@@ -2035,6 +2084,7 @@ export interface RootRouteChildren {
   AgoraRoute: typeof AgoraRoute
   ConductorRoute: typeof ConductorRoute
   DashboardRoute: typeof DashboardRoute
+  DashboardConnectRoute: typeof DashboardConnectRoute
   EarlyAccessRoute: typeof EarlyAccessRoute
   EchoStudioRoute: typeof EchoStudioRoute
   FilesRoute: typeof FilesRoute
@@ -2072,6 +2122,7 @@ export interface RootRouteChildren {
   ApiConnectionStatusRoute: typeof ApiConnectionStatusRoute
   ApiContextUsageRoute: typeof ApiContextUsageRoute
   ApiCrewStatusRoute: typeof ApiCrewStatusRoute
+  ApiDashboardAuthRoute: typeof ApiDashboardAuthRouteWithChildren
   ApiEventsRoute: typeof ApiEventsRoute
   ApiExternalAgentsRoute: typeof ApiExternalAgentsRoute
   ApiExternalConversationsRoute: typeof ApiExternalConversationsRouteWithChildren
@@ -2298,6 +2349,13 @@ declare module '@tanstack/react-router' {
       path: '/early-access'
       fullPath: '/early-access'
       preLoaderRoute: typeof EarlyAccessRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/dashboard-connect': {
+      id: '/dashboard-connect'
+      path: '/dashboard-connect'
+      fullPath: '/dashboard-connect'
+      preLoaderRoute: typeof DashboardConnectRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/dashboard': {
@@ -2776,6 +2834,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiEventsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/dashboard-auth': {
+      id: '/api/dashboard-auth'
+      path: '/api/dashboard-auth'
+      fullPath: '/api/dashboard-auth'
+      preLoaderRoute: typeof ApiDashboardAuthRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/crew-status': {
       id: '/api/crew-status'
       path: '/api/crew-status'
@@ -3252,6 +3317,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiDashboardOverviewRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/dashboard-auth/launch': {
+      id: '/api/dashboard-auth/launch'
+      path: '/launch'
+      fullPath: '/api/dashboard-auth/launch'
+      preLoaderRoute: typeof ApiDashboardAuthLaunchRouteImport
+      parentRoute: typeof ApiDashboardAuthRoute
+    }
+    '/api/dashboard-auth/callback': {
+      id: '/api/dashboard-auth/callback'
+      path: '/callback'
+      fullPath: '/api/dashboard-auth/callback'
+      preLoaderRoute: typeof ApiDashboardAuthCallbackRouteImport
+      parentRoute: typeof ApiDashboardAuthRoute
+    }
     '/api/claude-tasks/$taskId': {
       id: '/api/claude-tasks/$taskId'
       path: '/$taskId'
@@ -3392,6 +3471,19 @@ const ApiClaudeTasksRouteChildren: ApiClaudeTasksRouteChildren = {
 const ApiClaudeTasksRouteWithChildren = ApiClaudeTasksRoute._addFileChildren(
   ApiClaudeTasksRouteChildren,
 )
+
+interface ApiDashboardAuthRouteChildren {
+  ApiDashboardAuthCallbackRoute: typeof ApiDashboardAuthCallbackRoute
+  ApiDashboardAuthLaunchRoute: typeof ApiDashboardAuthLaunchRoute
+}
+
+const ApiDashboardAuthRouteChildren: ApiDashboardAuthRouteChildren = {
+  ApiDashboardAuthCallbackRoute: ApiDashboardAuthCallbackRoute,
+  ApiDashboardAuthLaunchRoute: ApiDashboardAuthLaunchRoute,
+}
+
+const ApiDashboardAuthRouteWithChildren =
+  ApiDashboardAuthRoute._addFileChildren(ApiDashboardAuthRouteChildren)
 
 interface ApiExternalConversationsConversationIdRouteChildren {
   ApiExternalConversationsConversationIdMessagesRoute: typeof ApiExternalConversationsConversationIdMessagesRoute
@@ -3580,6 +3672,7 @@ const rootRouteChildren: RootRouteChildren = {
   AgoraRoute: AgoraRoute,
   ConductorRoute: ConductorRoute,
   DashboardRoute: DashboardRoute,
+  DashboardConnectRoute: DashboardConnectRoute,
   EarlyAccessRoute: EarlyAccessRoute,
   EchoStudioRoute: EchoStudioRoute,
   FilesRoute: FilesRoute,
@@ -3617,6 +3710,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiConnectionStatusRoute: ApiConnectionStatusRoute,
   ApiContextUsageRoute: ApiContextUsageRoute,
   ApiCrewStatusRoute: ApiCrewStatusRoute,
+  ApiDashboardAuthRoute: ApiDashboardAuthRouteWithChildren,
   ApiEventsRoute: ApiEventsRoute,
   ApiExternalAgentsRoute: ApiExternalAgentsRoute,
   ApiExternalConversationsRoute: ApiExternalConversationsRouteWithChildren,

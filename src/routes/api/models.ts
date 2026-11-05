@@ -5,11 +5,12 @@ import YAML from 'yaml'
 import { json } from '@tanstack/react-start'
 import { createFileRoute } from '@tanstack/react-router'
 import { isAuthenticated } from '../../server/auth-middleware'
+import { dashboardAuthResponse } from '../../server/dashboard-auth-response'
 import {
   ensureGatewayProbed,
   getGatewayCapabilities,
 } from '../../server/claude-api'
-import { BEARER_TOKEN, CLAUDE_API } from '../../server/gateway-capabilities'
+import { BEARER_TOKEN, CLAUDE_API, dashboardFetch } from '../../server/gateway-capabilities'
 import {
   ensureDiscovery,
   ensureProviderInConfig,
@@ -388,10 +389,42 @@ function readClaudeConfigCatalog(): Array<ModelEntry> {
 /**
  * Fallback: fetch models from the hermes-agent /v1/models endpoint.
  */
+export function normalizeDashboardModels(payload: unknown): Array<ModelEntry> {
+  const catalog = asRecord(payload)
+  if (!Array.isArray(catalog.providers)) {
+    throw new Error('Hermes Dashboard returned an invalid model catalog')
+  }
+  return catalog.providers.flatMap((entry: unknown) => {
+    const provider = asRecord(entry)
+    if (provider.authenticated === false) return []
+    const slug = readString(provider.slug)
+    if (!slug || !Array.isArray(provider.models)) return []
+    return provider.models.flatMap((model: unknown) => {
+      const normalized = normalizeModel(model)
+      // Return model metadata only; never forward provider auth/account payloads.
+      return normalized
+        ? [{ id: normalized.id, name: normalized.name, provider: slug }]
+        : []
+    })
+  })
+}
+
 async function fetchClaudeModels(): Promise<Array<ModelEntry>> {
-  const headers: Record<string, string> = {}
-  if (BEARER_TOKEN) headers['Authorization'] = `Bearer ${BEARER_TOKEN}`
-  const response = await fetch(`${CLAUDE_API}/v1/models`, { headers })
+  // The gateway API key and Dashboard OAuth are distinct credentials. Reuse
+  // the signed-in request's Dashboard session when no API key is configured.
+  if (!BEARER_TOKEN) {
+    const response = await dashboardFetch('/api/model/options?include_unconfigured=false', {
+      signal: AbortSignal.timeout(6000),
+    })
+    if (!response.ok) {
+      throw new Error(`Hermes Dashboard models request failed (${response.status})`)
+    }
+    return normalizeDashboardModels(await response.json())
+  }
+  const response = await fetch(`${CLAUDE_API}/v1/models`, {
+    headers: { Authorization: `Bearer ${BEARER_TOKEN}` },
+    signal: AbortSignal.timeout(6000),
+  })
   if (!response.ok)
     throw new Error(`Hermes models request failed (${response.status})`)
   const payload = asRecord(await response.json())
@@ -400,9 +433,7 @@ async function fetchClaudeModels(): Promise<Array<ModelEntry>> {
     : Array.isArray(payload.models)
       ? payload.models
       : []
-  return rawModels
-    .map(normalizeModel)
-    .filter((e): e is ModelEntry => e !== null)
+  return rawModels.map(normalizeModel).filter((e): e is ModelEntry => e !== null)
 }
 
 export const Route = createFileRoute('/api/models')({
@@ -412,9 +443,8 @@ export const Route = createFileRoute('/api/models')({
         if (!isAuthenticated(request)) {
           return json({ ok: false, error: 'Unauthorized' }, { status: 401 })
         }
-        await ensureGatewayProbed()
-
         try {
+          await ensureGatewayProbed()
           // Primary: read user-configured models from ~/.hermes/models.json
           let models = readClaudeModelsJson()
           let source = 'models.json'
@@ -489,6 +519,8 @@ export const Route = createFileRoute('/api/models')({
             ...streamTimeouts,
           })
         } catch (err) {
+          const auth = dashboardAuthResponse(err)
+          if (auth) return auth
           return json(
             {
               ok: false,

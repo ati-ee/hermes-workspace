@@ -7,6 +7,8 @@ import { join } from 'node:path'
 import { isAuthenticated } from '../../server/auth-middleware'
 import { readWorkerMessages, type SwarmChatMessage } from '../../server/swarm-chat-reader'
 import { rosterByWorkerId } from '../../server/swarm-roster'
+import { SwarmDispatchError, dispatchNativeAssignments } from '../../server/swarm-native'
+import { requireJsonContentType } from '../../server/rate-limit'
 
 type DirectChatRequest = {
   workerId?: unknown
@@ -246,6 +248,8 @@ export const Route = createFileRoute('/api/swarm-direct-chat')({
         if (!isAuthenticated(request)) {
           return json({ error: 'Unauthorized' }, { status: 401 })
         }
+        const csrfCheck = requireJsonContentType(request)
+        if (csrfCheck) return csrfCheck
 
         let body: DirectChatRequest
         try {
@@ -254,7 +258,7 @@ export const Route = createFileRoute('/api/swarm-direct-chat')({
           return json({ error: 'Invalid JSON body' }, { status: 400 })
         }
 
-        const workerId = typeof body.workerId === 'string' ? body.workerId.trim() : ''
+        const workerId = typeof body.workerId === 'string' ? body.workerId : ''
         const prompt = typeof body.prompt === 'string' ? body.prompt.trim() : ''
         const limit = typeof body.limit === 'number' && Number.isFinite(body.limit) ? Math.max(1, Math.min(100, Math.floor(body.limit))) : DEFAULT_LIMIT
         const timeoutMs = typeof body.timeoutMs === 'number' && Number.isFinite(body.timeoutMs) ? Math.max(1_000, Math.min(MAX_TIMEOUT_MS, Math.floor(body.timeoutMs))) : DEFAULT_TIMEOUT_MS
@@ -266,27 +270,16 @@ export const Route = createFileRoute('/api/swarm-direct-chat')({
           return json({ error: 'Missing prompt' }, { status: 400 })
         }
 
-        const profilePath = getProfilePath(workerId)
-        const baselineChat = readWorkerMessages(profilePath, limit)
-        const baselineLastId = baselineChat.messages.length ? baselineChat.messages[baselineChat.messages.length - 1].id : null
-
-        const delivered = await sendPromptToLiveSession(workerId, prompt)
-        if (!delivered.ok) {
-          return json({
-            ok: false,
-            workerId,
-            delivered: false,
-            error: delivered.error,
-            sessionId: baselineChat.sessionId,
-            sessionTitle: baselineChat.sessionTitle,
-            messages: baselineChat.messages,
-            source: baselineChat.ok ? 'state.db' : 'unavailable',
-            fetchedAt: Date.now(),
-          } satisfies DirectChatResponse, { status: 500 })
+        try {
+          const dispatched = await dispatchNativeAssignments({ assignments: [{ workerId, task: prompt }] })
+          const result = dispatched.results[0]
+          return json({ ok: result.ok === true, workerId, delivered: Boolean(result.admissionId), delivery: 'native', missionId: dispatched.missionId,
+            sessionId: result.sessionId || null, admissionId: result.admissionId || null, sessionTitle: null,
+            messages: [], source: 'native', fetchedAt: Date.now(), error: result.error || null,
+            admissionStatus: dispatched.assignments[0]?.native?.status || 'unknown', note: 'Admission receipt only; use the exact existing native session in Desktop for attended approvals and output.' })
+        } catch (error) {
+          return json({ ok: false, delivered: false, error: error instanceof Error ? error.message : 'native_admission_failed' }, { status: error instanceof SwarmDispatchError ? error.status : 503 })
         }
-
-        const reply = await waitForReply(workerId, baselineLastId, prompt, limit, timeoutMs)
-        return json(reply)
       },
     },
   },

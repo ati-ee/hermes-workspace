@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { createFileRoute } from '@tanstack/react-router'
 import { json } from '@tanstack/react-start'
+import { dashboardAuthResponse } from '../../server/dashboard-auth-response'
 import { isAuthenticated } from '../../server/auth-middleware'
 import { requireJsonContentType } from '../../server/rate-limit'
 import {
@@ -66,6 +67,8 @@ export const Route = createFileRoute('/api/sessions')({
 
           return json({ sessions: gatewaySessions })
         } catch (err) {
+          const auth = dashboardAuthResponse(err)
+          if (auth) return auth
           return json(
             {
               error: err instanceof Error ? err.message : String(err),
@@ -145,6 +148,8 @@ export const Route = createFileRoute('/api/sessions')({
             modelApplied: true,
           })
         } catch (err) {
+          const auth = dashboardAuthResponse(err)
+          if (auth) return auth
           return json(
             {
               ok: false,
@@ -251,6 +256,8 @@ export const Route = createFileRoute('/api/sessions')({
             entry: toSessionSummary(session),
           })
         } catch (err) {
+          const auth = dashboardAuthResponse(err)
+          if (auth) return auth
           return json(
             {
               ok: false,
@@ -297,6 +304,8 @@ export const Route = createFileRoute('/api/sessions')({
 
           return json({ ok: true, sessionKey })
         } catch (err) {
+          const auth = dashboardAuthResponse(err)
+          if (auth) return auth
           return json(
             {
               ok: false,

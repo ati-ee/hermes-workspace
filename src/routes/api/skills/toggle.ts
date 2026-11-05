@@ -1,6 +1,7 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { json } from '@tanstack/react-start'
 import { isAuthenticated } from '../../../server/auth-middleware'
+import { dashboardAuthResponse } from '../../../server/dashboard-auth-response'
 import {
   BEARER_TOKEN,
   CLAUDE_API,
@@ -68,6 +69,8 @@ export const Route = createFileRoute('/api/skills/toggle')({
           const result = await response.json()
           return json(result, { status: response.status })
         } catch (error) {
+          const auth = dashboardAuthResponse(error)
+          if (auth) return auth
           return json(
             {
               ok: false,

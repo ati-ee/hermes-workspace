@@ -5,6 +5,7 @@ import { existsSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { requireLocalOrAuth } from '../../server/auth-middleware'
+import { legacyControlRefusal } from '../../server/swarm-legacy-control'
 
 /**
  * POST /api/swarm-tmux-scroll
@@ -95,6 +96,8 @@ export const Route = createFileRoute('/api/swarm-tmux-scroll')({
           return json({ error: 'direction must be up or down' }, { status: 400 })
         }
 
+        const refusal = legacyControlRefusal(workerId, ...(requestedSession ? [requestedSession] : []))
+        if (refusal) return refusal
         const tmuxBin = resolveTmuxBin()
         if (!tmuxBin) {
           return json({ error: 'tmux not installed' }, { status: 503 })

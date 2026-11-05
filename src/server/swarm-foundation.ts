@@ -4,7 +4,9 @@ import * as path from 'node:path'
 import * as YAML from 'yaml'
 import { z } from 'zod'
 import { getLocalBinDir, getProfilesDir } from './claude-paths'
-import { isSwarmWorkerId, rosterByWorkerId } from './swarm-roster'
+import { isSwarmWorkerId, readSwarmRoster, rosterByWorkerId } from './swarm-roster'
+import { configuredArgusProfiles } from './swarm-profile-policy'
+import { assertLegacyControlAllowed, assertLegacyProfileWriteAllowed } from './swarm-legacy-control'
 
 export const SwarmWorkerStateSchema = z.enum([
   'idle',
@@ -16,6 +18,10 @@ export const SwarmWorkerStateSchema = z.enum([
   'syncing',
   'reviewing',
   'offline',
+  'unknown',
+  'queued',
+  'completed',
+  'cancelled',
 ])
 
 export const SwarmCheckpointStatusSchema = z.enum([
@@ -28,7 +34,7 @@ export const SwarmCheckpointStatusSchema = z.enum([
 ])
 
 export const SwarmTerminalKindSchema = z.enum(['tmux', 'log-tail', 'shell', 'none'])
-export const SwarmRuntimeSourceSchema = z.enum(['runtime.json', 'fallback'])
+export const SwarmRuntimeSourceSchema = z.enum(['runtime.json', 'fallback', 'native'])
 export const SwarmTaskSourceSchema = z.enum(['runtime', 'claude-api', 'plugin', 'inferred'])
 export const SwarmArtifactKindSchema = z.enum(['file', 'diff', 'patch', 'build', 'log', 'report', 'preview'])
 export const SwarmArtifactSourceSchema = z.enum(['runtime', 'workspace', 'plugin', 'inferred'])
@@ -415,6 +421,8 @@ export function patchSwarmRuntimeFile(
   workerId: string,
   patch: Partial<SwarmRuntime>,
 ): { ok: boolean; error?: string } {
+  assertLegacyControlAllowed(workerId)
+  assertLegacyProfileWriteAllowed(profilePath)
   if (!fs.existsSync(profilePath)) {
     return { ok: false, error: `profile path missing: ${profilePath}` }
   }
@@ -450,15 +458,17 @@ export function patchSwarmRuntimeFile(
   }
 }
 
-export function listSwarmWorkerIds(options?: { swarmOnly?: boolean }): Array<string> {
-  const profilesDir = getProfilesDir()
-  if (!fs.existsSync(profilesDir)) return []
-  const entries = fs.readdirSync(profilesDir, { withFileTypes: true })
-  return entries
-    .filter((entry) => entry.isDirectory())
-    .map((entry) => entry.name)
-    .filter((name) => (options?.swarmOnly ?? false ? isSwarmWorkerId(name) : true))
-    .sort()
+/** Only configured profile directories are workers; caches and tombstones are not. */
+export function isConfiguredSwarmProfile(profilesDir: string, name: string): boolean {
+  if (!isSwarmWorkerId(name)) return false
+  try {
+    return fs.statSync(path.join(profilesDir, name)).isDirectory()
+      && fs.statSync(path.join(profilesDir, name, 'config.yaml')).isFile()
+  } catch { return false }
+}
+
+export function listSwarmWorkerIds(_options?: { swarmOnly?: boolean }): Array<string> {
+  return configuredArgusProfiles({ executionOnly: true }).map((profile) => profile.workerId)
 }
 
 export function getSwarmProfilePath(workerId: string): string {
@@ -466,7 +476,7 @@ export function getSwarmProfilePath(workerId: string): string {
 }
 
 export function getSwarmWrapperPath(workerId: string): string {
-  const worker = rosterByWorkerId([workerId]).get(workerId)
+  const worker = rosterByWorkerId([workerId], { includeArchived: true }).get(workerId)
   const wrapperName = worker?.wrapper?.trim() || workerId
   return path.join(getLocalBinDir(), wrapperName)
 }

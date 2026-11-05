@@ -3,6 +3,10 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+// Offline: the real modules probe the local gateway/dashboard (and fetch a token) on import.
+vi.mock('./gateway-capabilities', () => ({ ensureGatewayProbed: vi.fn(), dashboardFetch: vi.fn(), BEARER_TOKEN: '', CLAUDE_API: 'http://synthetic.invalid' }))
+vi.mock('./kanban-dashboard-proxy', () => ({ fetchDashboardKanbanTask: vi.fn() }))
+
 let tempRoot: string
 
 async function loadModule() {

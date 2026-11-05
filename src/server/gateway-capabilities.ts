@@ -20,6 +20,8 @@ import fs from 'node:fs'
 import path from 'node:path'
 import os from 'node:os'
 import { getStateDir } from './workspace-state-dir'
+import { requestDashboardBearer } from './dashboard-auth-context'
+import { DashboardAuthError } from './dashboard-native-auth'
 
 type WorkspaceOverrides = {
   claudeApiUrl?: string
@@ -280,6 +282,8 @@ export async function fetchDashboardToken(options?: {
   force?: boolean
 }): Promise<string> {
   const force = options?.force === true
+  const native = await requestDashboardBearer(CLAUDE_DASHBOARD_URL, force)
+  if (native) return native
 
   if (!force && dashboardTokenCache) return dashboardTokenCache
   if (!force && dashboardTokenPromise) return dashboardTokenPromise
@@ -292,6 +296,7 @@ export async function fetchDashboardToken(options?: {
     // gracefully — the caller already handles 401/non-ok via safeJson.
     try {
       const res = await fetch(`${CLAUDE_DASHBOARD_URL}/`, {
+        redirect: 'manual', // never follow an OAuth login while scraping legacy HTML
         signal: AbortSignal.timeout(PROBE_TIMEOUT_MS),
       })
       if (!res.ok) {
@@ -348,6 +353,7 @@ export async function dashboardFetch(
   init: RequestInit = {},
 ): Promise<Response> {
   const requestPath = withDashboardBase(path)
+  if (new URL(requestPath).origin !== new URL(CLAUDE_DASHBOARD_URL).origin) throw new DashboardAuthError(400, 'Dashboard credentials cannot be sent to another origin')
   const method = (init.method || 'GET').toUpperCase()
   const doFetch = async (forceToken = false) => {
     const headers = new Headers(init.headers)
@@ -380,6 +386,7 @@ export async function dashboardFetch(
     dashboardTokenCache = ''
     res = await doFetch(true)
   }
+  if (res.status === 401) throw new DashboardAuthError(401)
   return res
 }
 
@@ -654,7 +661,8 @@ async function probeKanban(dashboardAvailable: boolean): Promise<boolean> {
     // 200 is the normal success. Some auth setups may return 401 — still
     // means the route exists.
     return true
-  } catch {
+  } catch (error) {
+    if (error instanceof DashboardAuthError && error.status === 401) return true
     return false
   }
 }

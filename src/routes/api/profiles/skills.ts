@@ -19,6 +19,7 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { json } from '@tanstack/react-start'
 import { isAuthenticated } from '../../../server/auth-middleware'
+import { dashboardAuthResponse } from '../../../server/dashboard-auth-response'
 import {
   dashboardFetch,
   ensureGatewayProbed,
@@ -85,6 +86,8 @@ export const Route = createFileRoute('/api/profiles/skills')({
           const items = Array.isArray(parsed) ? parsed : []
           return json({ profile, items })
         } catch (err) {
+          const auth = dashboardAuthResponse(err)
+          if (auth) return auth
           return json(
             { error: err instanceof Error ? err.message : String(err) },
             { status: 500 },

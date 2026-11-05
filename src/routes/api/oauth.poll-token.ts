@@ -2,6 +2,7 @@ import { createFileRoute } from '@tanstack/react-router'
 import { json } from '@tanstack/react-start'
 import { z } from 'zod'
 import { dashboardFetch } from '../../server/gateway-capabilities'
+import { dashboardAuthResponse } from '../../server/dashboard-auth-response'
 
 const BodySchema = z.object({
   provider: z.string().min(1),
@@ -85,6 +86,8 @@ export const Route = createFileRoute('/api/oauth/poll-token')({
 
           return json(mapDashboardOAuthPoll(data as DashboardOAuthPollResponse))
         } catch (err) {
+          const auth = dashboardAuthResponse(err)
+          if (auth) return auth
           return json({
             status: 'error',
             message: err instanceof Error ? err.message : 'Network error',

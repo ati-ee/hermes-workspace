@@ -5,6 +5,7 @@ import {
   normalizeModelInfoResponse,
 } from '@/lib/model-info'
 import { isAuthenticated } from '../../../server/auth-middleware'
+import { dashboardAuthResponse } from '../../../server/dashboard-auth-response'
 import {
   dashboardFetch,
   ensureGatewayProbed,
@@ -29,7 +30,9 @@ export const Route = createFileRoute('/api/model/info')({
           if (response.ok) {
             rawPayload = await response.json()
           }
-        } catch {
+        } catch (error) {
+          const auth = dashboardAuthResponse(error)
+          if (auth) return auth
           rawPayload = null
         }
 

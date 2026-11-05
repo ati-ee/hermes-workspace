@@ -5,6 +5,7 @@ import { existsSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { isAuthenticated } from '../../server/auth-middleware'
+import { legacyControlRefusal } from '../../server/swarm-legacy-control'
 import {
   getSwarmProfilePath,
   patchSwarmRuntimeFile,
@@ -95,6 +96,8 @@ export const Route = createFileRoute('/api/swarm-tmux-stop')({
           return json({ error: 'workerId required' }, { status: 400 })
         }
 
+        const refusal = legacyControlRefusal(workerId)
+        if (refusal) return refusal
         const tmuxBin = resolveTmuxBin()
         if (!tmuxBin) {
           return json(

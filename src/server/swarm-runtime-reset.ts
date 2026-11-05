@@ -2,6 +2,8 @@ import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from '
 import { join } from 'node:path'
 import { getProfilesDir } from './claude-paths'
 import { listSwarmWorkerIds } from './swarm-foundation'
+import { assertLegacyControlAllowed, assertLegacyProfileWriteAllowed } from './swarm-legacy-control'
+import { SwarmDispatchError } from './swarm-profile-policy'
 
 export type SwarmRuntimeResetResult = {
   workerId: string
@@ -44,6 +46,14 @@ export function resolveResetTargetWorkerIds(workerIds?: Array<string> | null): {
 }
 
 export function resetSwarmWorkerRuntime(workerId: string, input: { actor: string; reason: string }): SwarmRuntimeResetResult {
+  // Return a per-worker refusal for legacy cancel/stop callers, before profile/runtime reads.
+  try {
+    assertLegacyControlAllowed(workerId)
+    assertLegacyProfileWriteAllowed(join(getProfilesDir(), workerId))
+  } catch (error) {
+    if (error instanceof SwarmDispatchError) return { workerId, ok: false, error: error.message }
+    throw error
+  }
   const available = new Set(listResettableSwarmWorkerIds())
   if (!available.has(workerId)) {
     return { workerId, ok: false, error: 'unknown worker id' }
@@ -99,5 +109,6 @@ export function resetSwarmWorkerRuntime(workerId: string, input: { actor: string
 }
 
 export function resetSwarmWorkerRuntimes(workerIds: Array<string>, input: { actor: string; reason: string }): Array<SwarmRuntimeResetResult> {
+  // Delegate every target to the guarded writer; mixed batches retain per-worker outcomes.
   return workerIds.map((workerId) => resetSwarmWorkerRuntime(workerId, input))
 }

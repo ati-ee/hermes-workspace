@@ -1,6 +1,7 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { json } from '@tanstack/react-start'
 import { isAuthenticated } from '../../server/auth-middleware'
+import { dashboardAuthResponse } from '../../server/dashboard-auth-response'
 import {
   BEARER_TOKEN,
   CLAUDE_API,
@@ -177,6 +178,8 @@ export const Route = createFileRoute('/api/mcp')({
             categories: [...KNOWN_CATEGORIES],
           })
         } catch (err) {
+          const auth = dashboardAuthResponse(err)
+          if (auth) return auth
           return json(
             { ok: false, error: safeErrorMessage(err), servers: [], total: 0, categories: [...KNOWN_CATEGORIES] },
             { status: 500 },
@@ -237,6 +240,8 @@ export const Route = createFileRoute('/api/mcp')({
           }
           return json({ ok: true, server: maskSecretsInPlace(written) })
         } catch (err) {
+          const auth = dashboardAuthResponse(err)
+          if (auth) return auth
           return json({ ok: false, error: safeErrorMessage(err) }, { status: 500 })
         }
       },

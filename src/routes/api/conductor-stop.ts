@@ -4,8 +4,9 @@ import { isAuthenticated } from '../../server/auth-middleware'
 import { requireJsonContentType } from '../../server/rate-limit'
 import { deleteSession } from '../../server/claude-api'
 import { dashboardFetch, ensureGatewayProbed } from '../../server/gateway-capabilities'
-import { cancelSwarmMission } from '../../server/swarm-missions'
+import { cancelSwarmMission, getSwarmMission, listSwarmMissions } from '../../server/swarm-missions'
 import { resetSwarmWorkerRuntime } from '../../server/swarm-runtime-reset'
+import type { SwarmRuntimeResetResult } from '../../server/swarm-runtime-reset'
 
 export const Route = createFileRoute('/api/conductor-stop')({
   server: {
@@ -35,6 +36,12 @@ export const Route = createFileRoute('/api/conductor-stop')({
           let deleted = 0
           let stoppedMissions = 0
           let cancelledNativeMissions = 0
+          const runtimeResets: Array<SwarmRuntimeResetResult> = []
+          const nativeMissions = listSwarmMissions(100).filter((mission) => mission.assignments.some((assignment) => assignment.native))
+          if (missionIds.some((id) => getSwarmMission(id)?.assignments.some((assignment) => assignment.native))
+              || nativeMissions.some((mission) => mission.assignments.some((assignment) => assignment.native?.sessionId && sessionKeys.includes(assignment.native.sessionId)))) {
+            return json({ ok: false, error: 'native_control_required; work preserved, use exact session/admission in Desktop' }, { status: 409 })
+          }
           const capabilities = await ensureGatewayProbed()
           for (const missionId of missionIds) {
             try {
@@ -47,10 +54,10 @@ export const Route = createFileRoute('/api/conductor-stop')({
                 cancelledNativeMissions += 1
                 for (const workerId of Array.from(new Set(cancelled.mission.assignments.map((assignment) => assignment.workerId)))) {
                   try {
-                    resetSwarmWorkerRuntime(workerId, {
+                    runtimeResets.push(resetSwarmWorkerRuntime(workerId, {
                       actor: 'conductor-stop',
                       reason: `Cancelled native Conductor mission ${missionId}`,
-                    })
+                    }))
                   } catch {
                     // Runtime reset is best-effort; cancellation state is still durable.
                   }
@@ -83,7 +90,7 @@ export const Route = createFileRoute('/api/conductor-stop')({
             }
           }
 
-          return json({ ok: true, deleted, stoppedMissions, cancelledNativeMissions })
+          return json({ ok: true, deleted, stoppedMissions, cancelledNativeMissions, runtimeResets })
         } catch (error) {
           return json(
             {

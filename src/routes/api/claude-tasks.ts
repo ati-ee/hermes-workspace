@@ -1,6 +1,7 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { isAuthenticated } from '../../server/auth-middleware'
-import { createClaudeTask, listClaudeTasks } from '../../server/claude-tasks-backend'
+import { createClaudeTask, getClaudeTasksBackendMeta, listClaudeTasks } from '../../server/claude-tasks-backend'
+import { DashboardAuthError } from '../../server/dashboard-native-auth'
 import type { TaskColumn, TaskPriority } from '../../server/claude-tasks-backend'
 
 function jsonResponse(data: unknown, status = 200) {
@@ -34,14 +35,21 @@ export const Route = createFileRoute('/api/claude-tasks')({
         }
 
         const url = new URL(request.url)
-        const tasks = await listClaudeTasks({
+        try {
+          const tasks = await listClaudeTasks({
           column: url.searchParams.get('column'),
           assignee: url.searchParams.get('assignee'),
           priority: url.searchParams.get('priority'),
           includeDone: url.searchParams.get('include_done') === 'true',
         })
 
-        return jsonResponse({ tasks })
+          // This existing proxy reads the Dashboard's default board, not every project.
+          const backend = getClaudeTasksBackendMeta()
+          return jsonResponse({ tasks, source: backend.id, boardId: backend.id === 'hermes-proxy' ? 'default' : null })
+        } catch (error) {
+          if (error instanceof DashboardAuthError) return jsonResponse({ error: 'Hermes Dashboard authentication required or unavailable', code: error.status === 401 ? 'dashboard_auth_required' : 'dashboard_auth_unavailable', needs_login: error.status === 401, login_url: '/dashboard-connect' }, error.status)
+          return jsonResponse({ error: 'Task metadata unavailable', code: 'task_feed_unavailable' }, 502)
+        }
       },
 
       POST: async ({ request }) => {
@@ -67,7 +75,8 @@ export const Route = createFileRoute('/api/claude-tasks')({
           })
 
           return jsonResponse({ task }, 201)
-        } catch {
+        } catch (error) {
+          if (error instanceof DashboardAuthError) return jsonResponse({ error: 'Hermes Dashboard authentication required or unavailable', code: error.status === 401 ? 'dashboard_auth_required' : 'dashboard_auth_unavailable', needs_login: error.status === 401, login_url: '/dashboard-connect' }, error.status)
           return jsonResponse({ error: 'Invalid request body' }, 400)
         }
       },

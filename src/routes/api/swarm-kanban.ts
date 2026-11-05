@@ -1,6 +1,8 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { json } from '@tanstack/react-start'
 import { z } from 'zod'
+import { isAuthenticated } from '../../server/auth-middleware'
+import { dashboardAuthResponse } from '../../server/dashboard-auth-response'
 import { createKanbanCard, getKanbanBackendMeta, listKanbanCards, updateKanbanCard } from '../../server/kanban-backend'
 
 const AcceptanceCriteriaSchema = z.preprocess(
@@ -53,12 +55,17 @@ const UpdateCardSchema = CreateCardSchema.partial().extend({
 export const Route = createFileRoute('/api/swarm-kanban')({
   server: {
     handlers: {
-      GET: async () => {
-        return json({
+      GET: async ({ request }) => {
+        if (!isAuthenticated(request)) return json({ error: 'Unauthorized' }, { status: 401 })
+        try { return json({
           ok: true,
           cards: await listKanbanCards(),
           backend: getKanbanBackendMeta(),
-        })
+        }) } catch (error) {
+          const auth = dashboardAuthResponse(error)
+          if (auth) return auth
+          return json({ error: 'Native Kanban unavailable' }, { status: 502 })
+        }
       },
       POST: async ({ request }) => {
         let body: unknown
