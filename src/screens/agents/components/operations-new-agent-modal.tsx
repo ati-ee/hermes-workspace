@@ -277,6 +277,16 @@ export function OperationsNewAgentModal({
         <label className="mt-4 block space-y-2">
           <span className="text-sm font-medium text-[var(--theme-text)]">Model</span>
           <ModelSelector value={model} onChange={setModel} models={models} />
+          {modelsQuery.isPending ? (
+            <p role="status" className="text-sm text-[var(--theme-muted)]">Loading models...</p>
+          ) : modelsQuery.isError ? (
+            <div role="alert" className="text-sm text-red-400">
+              <p>{modelsQuery.error instanceof Error ? modelsQuery.error.message : 'Failed to load models'}</p>
+              <button type="button" className="underline" onClick={() => void modelsQuery.refetch()}>Retry</button>
+            </div>
+          ) : models.length === 0 ? (
+            <p role="status" className="text-sm text-[var(--theme-muted)]">No models are available for the active connection.</p>
+          ) : null}
         </label>
 
         <label className="mt-4 block space-y-2">

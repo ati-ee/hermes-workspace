@@ -588,6 +588,8 @@ const config = defineConfig(({ mode, command }) => {
           if (command !== 'serve') return
         },
         configureServer(server) {
+          // Vitest's virtual dev server must not start/stop real gateway or daemon processes.
+          if (process.env.VITEST) return
           // Cross-origin isolation headers on EVERY response so the embedded
           // HermesWorld WebGL client keeps SharedArrayBuffer multithreading
           // (matches play.hermes-world.ai). Injected via middleware because the
@@ -799,6 +801,11 @@ const config = defineConfig(({ mode, command }) => {
           if (existsSync(src)) {
             mkdirSync(destDir, { recursive: true })
             copyFileSync(src, dest)
+          }
+          const nativeBridge = resolve('src/server/swarm-native-bridge.py')
+          if (existsSync(nativeBridge)) {
+            mkdirSync(destDir, { recursive: true })
+            copyFileSync(nativeBridge, resolve(destDir, 'swarm-native-bridge.py'))
           }
         },
       },

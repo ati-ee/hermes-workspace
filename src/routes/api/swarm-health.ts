@@ -6,6 +6,7 @@ import * as yaml from 'yaml'
 import { isAuthenticated } from '../../server/auth-middleware'
 import { getLocalBinDir, getProfilesDir } from '../../server/claude-paths'
 import { formatSwarmWorkerLabel, isSwarmWorkerId, resolveSwarmWorkerDisplayName, rosterByWorkerId } from '../../server/swarm-roster'
+import { listSwarmWorkerIds } from '../../server/swarm-foundation'
 import type { SwarmRosterWorker } from '../../server/swarm-roster'
 
 export type WorkerModelAuthStatus = 'ready' | 'primary-auth-failed' | 'fallback-active' | 'not-configured' | 'unknown'
@@ -54,13 +55,7 @@ export function resolveWorkerWrapperName(workerId: string, worker?: Pick<SwarmRo
 }
 
 function listSwarmIds(): Array<string> {
-  const dir = getProfilesDir()
-  if (!existsSync(dir)) return []
-  return readdirSync(dir, { withFileTypes: true })
-    .filter((entry) => entry.isDirectory())
-    .map((entry) => entry.name)
-    .filter((name) => isSwarmWorkerId(name))
-    .sort()
+  return listSwarmWorkerIds()
 }
 
 function readWorkerConfig(profilePath: string): { model: string; provider: string } {

@@ -12,6 +12,8 @@ import fs from 'node:fs'
 import path from 'node:path'
 import os from 'node:os'
 import YAML from 'yaml'
+import { configuredArgusProfiles } from '../../server/swarm-profile-policy'
+import { getHermesRoot } from '../../server/claude-paths'
 
 type RawAssignee = {
   id?: unknown
@@ -27,7 +29,7 @@ type TaskAssignee = {
   isHuman: boolean
 }
 
-const CLAUDE_HOME = process.env.HERMES_HOME ?? process.env.CLAUDE_HOME ?? path.join(os.homedir(), '.hermes')
+const CLAUDE_HOME = getHermesRoot()
 const CONFIG_PATH = path.join(CLAUDE_HOME, 'config.yaml')
 const PROFILES_PATH = path.join(CLAUDE_HOME, 'profiles')
 
@@ -40,21 +42,7 @@ function readConfig(): Record<string, unknown> {
 }
 
 function getProfileNames(): string[] {
-  try {
-    return fs.readdirSync(PROFILES_PATH).filter(name => {
-      try {
-        const profilePath = path.join(PROFILES_PATH, name)
-        return (
-          fs.statSync(profilePath).isDirectory() &&
-          fs.existsSync(path.join(profilePath, 'config.yaml'))
-        )
-      } catch {
-        return false
-      }
-    })
-  } catch {
-    return []
-  }
+  return configuredArgusProfiles({ executionOnly: true }).map((profile) => profile.workerId)
 }
 
 function authHeaders(): Record<string, string> {
@@ -142,7 +130,7 @@ export const Route = createFileRoute('/api/claude-tasks-assignees')({
         const profiles = getProfileNames()
         const merged = new Map<string, TaskAssignee>()
         for (const assignee of remoteAssignees) {
-          merged.set(assignee.id, assignee)
+          if (assignee.isHuman || profiles.includes(assignee.id)) merged.set(assignee.id, assignee)
         }
         for (const id of profiles) {
           if (!merged.has(id)) {

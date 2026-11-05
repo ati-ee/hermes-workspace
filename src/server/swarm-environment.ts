@@ -59,9 +59,6 @@ export function getSwarmEnvironment(): SwarmEnvironment {
       '/api/swarm-chat',
       '/api/swarm-decompose',
       '/api/swarm-dispatch',
-      '/api/swarm-tmux-start',
-      '/api/swarm-tmux-stop',
-      '/api/swarm-tmux-scroll',
     ],
     writableRoots: [
       SWARM_CANONICAL_REPO,
@@ -78,7 +75,7 @@ export function getSwarmEnvironment(): SwarmEnvironment {
       'Swarm code, git, build, and tests run only in the canonical repo.',
       'Do not use the legacy hermes-workspace alias for Swarm work.',
       'Worker profiles live under ~/.hermes/profiles/<workerId> and wrappers under ~/.local/bin/swarmN.',
-      'Prefer live tmux-backed Hermes sessions over one-shot subprocesses.',
+      'ARGUS execution uses attended native admissions only; legacy tmux/lifecycle control is refused.',
       'Use the swarm APIs as the machine-readable source of worker/runtime truth.',
     ],
   }

@@ -3,6 +3,8 @@ import { json } from '@tanstack/react-start'
 import { isAuthenticated } from '../../server/auth-middleware'
 import { ensureGatewayProbed, getResolvedUrls } from '../../server/gateway-capabilities'
 import { getBearerToken } from '../../server/openai-compat-api'
+import { SwarmDispatchError, requireExecutionProfile } from '../../server/swarm-profile-policy'
+import { requireJsonContentType } from '../../server/rate-limit'
 
 type DecomposeRequest = {
   prompt?: unknown
@@ -171,7 +173,8 @@ export const Route = createFileRoute('/api/swarm-decompose')({
         if (!isAuthenticated(request)) {
           return json({ error: 'Unauthorized' }, { status: 401 })
         }
-        await ensureGatewayProbed()
+        const csrfCheck = requireJsonContentType(request)
+        if (csrfCheck) return csrfCheck
         let body: DecomposeRequest
         try { body = await request.json() as DecomposeRequest } catch { return json({ error: 'Invalid JSON body' }, { status: 400 }) }
 
@@ -179,46 +182,12 @@ export const Route = createFileRoute('/api/swarm-decompose')({
         if (!prompt) return json({ error: 'prompt required' }, { status: 400 })
         if (prompt.length > 16_000) return json({ error: 'prompt too long' }, { status: 400 })
 
-        const workersRaw = Array.isArray(body.workers) ? body.workers : []
-        const workers: WorkerHint[] = []
-        for (const entry of workersRaw) {
-          if (!entry || typeof entry !== 'object') continue
-          const obj = entry as Record<string, unknown>
-          const id = typeof obj.id === 'string' ? obj.id.trim() : ''
-          if (!id || id === 'workspace') continue
-          workers.push({
-            id,
-            role: typeof obj.role === 'string' ? obj.role : undefined,
-            model: typeof obj.model === 'string' ? obj.model : undefined,
-            specialty: typeof obj.specialty === 'string' ? obj.specialty : undefined,
-            mission: typeof obj.mission === 'string' ? obj.mission : undefined,
-            skills: Array.isArray(obj.skills) ? obj.skills.filter((value): value is string => typeof value === 'string') : undefined,
-            capabilities: Array.isArray(obj.capabilities) ? obj.capabilities.filter((value): value is string => typeof value === 'string') : undefined,
-            notes: typeof obj.notes === 'string' ? obj.notes : undefined,
-          })
-        }
-        if (workers.length === 0) return json({ error: 'workers[] required' }, { status: 400 })
-
-        const requestedModel = typeof body.model === 'string' && body.model.trim() ? body.model.trim() : (process.env.CLAUDE_DEFAULT_MODEL ?? 'claude-opus-4-7')
-
         try {
-          const result = await callOrchestrator(prompt, workers, requestedModel)
-          return json({
-            ok: true,
-            decomposedAt: Date.now(),
-            model: requestedModel,
-            ...result,
-          })
+          requireExecutionProfile('orchestrator-argus')
+          if (body.model) return json({ error: 'profile_route_override_forbidden' }, { status: 400 })
+          return json({ ok: true, mode: 'native-coordinator-plan', assignments: [{ workerId: 'orchestrator-argus', task: prompt, rationale: 'Existing sole dispatcher; no specialist broadcast or provider fallback.' }], unassigned: [], model: null, decomposedAt: Date.now() })
         } catch (error) {
-          const fallback = heuristicAssignments(prompt, workers)
-          return json({
-            ok: true,
-            fallback: true,
-            warning: error instanceof Error ? error.message : 'decompose failed',
-            decomposedAt: Date.now(),
-            model: requestedModel,
-            ...fallback,
-          })
+          return json({ ok: false, error: error instanceof Error ? error.message : 'native_coordinator_unavailable' }, { status: error instanceof SwarmDispatchError ? error.status : 503 })
         }
       },
     },

@@ -1,13 +1,18 @@
+import { listSwarmWorkerIds } from '../../server/swarm-foundation'
 import { createFileRoute } from '@tanstack/react-router'
 import { json } from '@tanstack/react-start'
 import { isAuthenticated } from '../../server/auth-middleware'
-import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { execFileSync } from 'node:child_process'
 import { join } from 'node:path'
 import * as yaml from 'yaml'
 import { BEARER_TOKEN, CLAUDE_API, ensureGatewayProbed } from '../../server/gateway-capabilities'
-import { getClaudeRoot, getProfileClaudeHome, getWorkspaceClaudeHome } from '../../server/claude-paths'
+import { getProfileClaudeHome, getWorkspaceClaudeHome } from '../../server/claude-paths'
 import { formatSwarmWorkerLabel, rosterByWorkerId, type SwarmRosterWorker } from '../../server/swarm-roster'
+import { readNativeProfileStatus } from '../../server/swarm-native-status'
+import { timestampMilliseconds } from '../../lib/native-timestamps'
+import { configuredTerminalContext } from '../../lib/argus-main'
+import type { TerminalContext } from '../../lib/argus-main'
 
 type CrewDefinition = {
   id: string
@@ -56,27 +61,11 @@ function buildCrewDefinitionFromRoster(profile: string, worker: SwarmRosterWorke
 }
 
 function buildCrewDefinitions(): CrewDefinition[] {
-  const profilesDir = join(getClaudeRoot(), 'profiles')
-  const dynamicProfiles = existsSync(profilesDir)
-    ? readdirSync(profilesDir, { withFileTypes: true })
-        .filter((entry) => {
-          const profilePath = join(profilesDir, entry.name)
-          if (entry.isDirectory()) return true
-          if (!entry.isSymbolicLink()) return false
-          try {
-            return statSync(profilePath).isDirectory()
-          } catch {
-            return false
-          }
-        })
-        .map((entry) => entry.name)
-        .sort()
-    : []
+  const dynamicProfiles = listSwarmWorkerIds()
 
   const roster = rosterByWorkerId(dynamicProfiles)
   return [
-    { id: 'workspace', displayName: 'Workspace', humanLabel: 'Workspace — Primary profile', role: 'Primary profile', profilePath: null },
-    ...dynamicProfiles.map((profile) => buildCrewDefinitionFromRoster(profile, /^swarm\d+$/i.test(profile) ? roster.get(profile) : null)),
+    ...dynamicProfiles.map((profile) => buildCrewDefinitionFromRoster(profile, roster.get(profile))),
   ]
 }
 
@@ -167,7 +156,9 @@ print(json.dumps(out))
       encoding: 'utf-8',
       timeout: 3_000,
     })
-    return JSON.parse(raw) as DbStats
+    const result = JSON.parse(raw) as DbStats
+    // Hermes inserts sessions.started_at with time.time() (Unix seconds); UI timestamps use ms.
+    return { ...result, lastSessionAt: timestampMilliseconds(result.lastSessionAt, 'seconds') }
   } catch {
     return {
       sessionCount: 0,
@@ -181,25 +172,31 @@ print(json.dumps(out))
   }
 }
 
-function readConfig(claudeHome: string): { model: string; provider: string } {
+function readConfig(claudeHome: string): { model: string; provider: string; terminalContext?: TerminalContext; reasoningEffort?: string | null } {
   const configPath = join(claudeHome, 'config.yaml')
   if (!existsSync(configPath)) return { model: 'unknown', provider: 'unknown' }
   try {
     const raw = yaml.parse(readFileSync(configPath, 'utf-8')) as Record<string, unknown>
     const modelVal = raw.model
     const providerVal = raw.provider
+    const terminalContext = configuredTerminalContext(raw)
+    const reasoningEffort = typeof raw.reasoning_effort === 'string' ? raw.reasoning_effort : typeof raw.reasoning === 'string' ? raw.reasoning : null
 
     if (typeof modelVal === 'object' && modelVal !== null) {
       const modelObj = modelVal as Record<string, unknown>
       return {
         model: String(modelObj.default ?? modelObj.name ?? 'unknown'),
         provider: String(modelObj.provider ?? providerVal ?? 'unknown'),
+        terminalContext,
+        reasoningEffort,
       }
     }
 
     return {
       model: String(modelVal ?? 'unknown'),
       provider: String(providerVal ?? 'unknown'),
+      terminalContext,
+      reasoningEffort,
     }
   } catch {
     return { model: 'unknown', provider: 'unknown' }
@@ -252,11 +249,10 @@ export const Route = createFileRoute('/api/crew-status')({
           return json({ error: 'Unauthorized' }, { status: 401 })
         }
 
-        await ensureGatewayProbed()
-        const taskCounts = await fetchAssignedTaskCounts()
+        const taskCounts: Record<string, number> = {}
         const crewDefinitions = buildCrewDefinitions()
 
-        const crew = crewDefinitions.map((member) => {
+        const crew = await Promise.all(crewDefinitions.map(async (member) => {
           const claudeHome = getClaudeHome(member.profilePath)
           const profileFound = existsSync(claudeHome)
 
@@ -288,7 +284,7 @@ export const Route = createFileRoute('/api/crew-status')({
             }
           }
 
-          const gatewayInfo = readGatewayState(claudeHome)
+          const nativeEvidence = await readNativeProfileStatus(member.id)
           const dbStats = readDbStats(claudeHome)
           const config = readConfig(claudeHome)
 
@@ -302,11 +298,14 @@ export const Route = createFileRoute('/api/crew-status')({
             skills: member.skills,
             capabilities: member.capabilities,
             profileFound: true,
-            gatewayState: gatewayInfo.gatewayState,
-            processAlive: checkProcessAlive(gatewayInfo.pid),
-            platforms: gatewayInfo.platforms,
+            gatewayState: nativeEvidence.connected ? 'running' : nativeEvidence.state === 'offline' ? 'stopped' : 'unknown',
+            processAlive: nativeEvidence.connected,
+            platforms: {},
+            nativeEvidence,
             model: config.model,
             provider: config.provider,
+            terminalContext: config.terminalContext,
+            reasoningEffort: config.reasoningEffort,
             lastSessionTitle: dbStats.lastSessionTitle,
             lastSessionAt: dbStats.lastSessionAt,
             sessionCount: dbStats.sessionCount,
@@ -317,7 +316,7 @@ export const Route = createFileRoute('/api/crew-status')({
             cronJobCount: readCronJobCount(claudeHome),
             assignedTaskCount: taskCounts[member.id] ?? 0,
           }
-        })
+        }))
 
         return json({ crew, fetchedAt: Date.now() })
       },

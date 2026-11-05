@@ -2,6 +2,9 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import YAML from 'yaml'
+import { dashboardFetch } from './gateway-capabilities'
+import { DashboardAuthError } from './dashboard-native-auth'
+import { getHermesRoot as canonicalHermesRoot } from './claude-paths'
 
 export type ProfileSummary = {
   name: string
@@ -49,11 +52,7 @@ const TEXT_REWRITE_EXTENSIONS = new Set([
 ])
 
 function getHermesRoot(): string {
-  return (
-    process.env.HERMES_HOME ??
-    process.env.CLAUDE_HOME ??
-    path.join(os.homedir(), '.hermes')
-  )
+  return canonicalHermesRoot()
 }
 
 function getClaudeRoot(): string {
@@ -215,11 +214,9 @@ async function fetchDashboardProfiles(): Promise<{
   if (!dashboardUrl) return null
 
   try {
-    const token = getDashboardToken()
     const headers: Record<string, string> = {}
-    if (token) headers['Authorization'] = `Bearer ${token}`
 
-    const response = await fetch(`${dashboardUrl}/api/profiles`, {
+    const response = await dashboardFetch('/api/profiles', {
       headers,
       signal: AbortSignal.timeout(5000),
     })

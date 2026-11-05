@@ -1,3 +1,4 @@
+import { DashboardAuthNotice } from '@/components/dashboard-auth-notice'
 import {
   HeadContent,
   Outlet,
@@ -366,6 +367,7 @@ function RootLayout() {
           <GlobalShortcutListener />
           <TerminalShortcutListener />
           <WorkspaceShell>
+            <DashboardAuthNotice />
             <ErrorBoundary
               className="h-full min-h-0 flex-1"
               title="Something went wrong"

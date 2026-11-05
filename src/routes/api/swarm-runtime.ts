@@ -27,6 +27,7 @@ import {
 } from '../../server/swarm-foundation'
 import { formatSwarmWorkerLabel, resolveSwarmWorkerDisplayName, rosterByWorkerId } from '../../server/swarm-roster'
 import { readSwarmMode, writeSwarmMode } from '../../server/swarm-mode'
+import { nativeRuntimeEntry } from '../../server/swarm-native-runtime'
 import type {SwarmArtifactMetadata, SwarmBoundary, SwarmCheckpointStatus, SwarmDispatchMetadata, SwarmLifecycleMetadata, SwarmPreviewMetadata, SwarmRuntimeSource, SwarmSessionMetadata, SwarmTaskMetadata, SwarmTerminalKind, SwarmWorkerState} from '../../server/swarm-foundation';
 
 type RuntimeEntry = {
@@ -195,8 +196,8 @@ async function buildEntry(
     role: roster?.role || runtime.role,
     specialty: roster?.specialty || null,
     mission: roster?.mission || null,
-    skills: roster.skills.length ? roster.skills : [],
-    capabilities: roster.capabilities.length ? roster.capabilities : [],
+    skills: roster?.skills || [],
+    capabilities: roster?.capabilities || [],
     source,
     pid: lifecycle.pid,
     startedAt: runtime.startedAt,
@@ -252,8 +253,8 @@ export const Route = createFileRoute('/api/swarm-runtime')({
           return json({ error: 'Unauthorized' }, { status: 401 })
         }
         const ids = listWorkerIds()
-        const tmuxAvailable = await tmuxIsInstalled()
-        const entries = await Promise.all(ids.map((id) => buildEntry(id, tmuxAvailable)))
+        const tmuxAvailable = false
+        const entries = await Promise.all(ids.map(nativeRuntimeEntry))
         return json({
           checkedAt: Date.now(),
           registryVersion: 1,

@@ -3,6 +3,7 @@ import { readFileSync, writeFileSync, existsSync } from 'node:fs'
 import { execFileSync } from 'node:child_process'
 import type { ParsedSwarmCheckpoint } from './swarm-checkpoints'
 import { getSwarmProfilePath } from './swarm-foundation'
+import { assertLegacyControlAllowed, assertLegacyProfileWriteAllowed } from './swarm-legacy-control'
 import { publishChatEvent } from './chat-event-bus'
 
 const ORCHESTRATOR_WORKER_ID = process.env.SWARM_ORCHESTRATOR_WORKER_ID?.trim() || 'orchestrator'
@@ -150,7 +151,9 @@ export function publishSwarmCheckpointNotification(input: {
   assignmentId?: string | null
   notifySessionKey?: string | null
 }): { published: boolean; sessionKey: string; route: 'orchestrator' | 'main' | 'noop'; orchestrator?: { sent: boolean; session: string; error?: string; skippedSelf?: boolean } } {
+  assertLegacyControlAllowed(input.workerId)
   const profilePath = getSwarmProfilePath(input.workerId)
+  assertLegacyProfileWriteAllowed(profilePath)
   const runtimePath = join(profilePath, 'runtime.json')
   const current = readRuntime(runtimePath)
   const currentRaw = typeof current.lastNotifiedCheckpointRaw === 'string' ? current.lastNotifiedCheckpointRaw : null

@@ -18,6 +18,7 @@ import { copyFileSync, existsSync, lstatSync, mkdirSync, readFileSync, readdirSy
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import * as yaml from 'yaml'
+import { assertLegacyControlAllowed, assertLegacyProfileWriteAllowed } from './swarm-legacy-control'
 
 export type ConfigSyncResult =
   | { ok: true; changed: boolean; previous?: { provider: string; default: string } }
@@ -71,6 +72,7 @@ function linkSharedFile(source: string, target: string): boolean {
  * The config is copied (not symlinked) because per-worker model sync edits it.
  */
 export function ensureSwarmProfileConfig(profilePath: string): ProfileBootstrapResult {
+  assertLegacyProfileWriteAllowed(profilePath)
   const result: ProfileBootstrapResult = { ok: true, configCreated: false, envLinked: false, authLinked: false, mcpTokensLinked: 0 }
   try {
     mkdirSync(profilePath, { recursive: true })
@@ -171,6 +173,8 @@ export function renderSwarmWorkerIdentity(worker: SwarmWorkerIdentity): string {
 }
 
 export function syncSwarmProfileIdentity(profilePath: string, worker: SwarmWorkerIdentity): ConfigSyncResult {
+  assertLegacyControlAllowed(worker.id)
+  assertLegacyProfileWriteAllowed(profilePath)
   if (!existsSync(profilePath)) {
     return { ok: false, error: `profile path missing: ${profilePath}` }
   }
@@ -194,6 +198,7 @@ export function syncSwarmProfileModel(
   profilePath: string,
   next: { provider: string; default: string },
 ): ConfigSyncResult {
+  assertLegacyProfileWriteAllowed(profilePath)
   if (!existsSync(profilePath)) {
     return { ok: false, error: `profile path missing: ${profilePath}` }
   }

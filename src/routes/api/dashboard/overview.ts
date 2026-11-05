@@ -17,6 +17,7 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { json } from '@tanstack/react-start'
 import { isAuthenticated } from '../../../server/auth-middleware'
+import { dashboardAuthResponse } from '../../../server/dashboard-auth-response'
 import {
   dashboardFetch,
   gatewayFetch,
@@ -66,6 +67,8 @@ export const Route = createFileRoute('/api/dashboard/overview')({
             },
           })
         } catch (err) {
+          const auth = dashboardAuthResponse(err)
+          if (auth) return auth
           return json(
             {
               error:

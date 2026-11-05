@@ -10,6 +10,7 @@ export type TaskColumn = 'backlog' | 'todo' | 'in_progress' | 'review' | 'blocke
 export type TaskPriority = 'high' | 'medium' | 'low'
 
 export type ClaudeTaskRecord = {
+  source?: string
   id: string
   title: string
   description: string
@@ -85,6 +86,7 @@ function mapTaskColumnToKanbanStatus(column: TaskColumn): 'backlog' | 'ready' | 
 }
 
 function mapCardToTask(card: {
+  source?: string
   id: string
   title: string
   spec: string
@@ -95,6 +97,7 @@ function mapCardToTask(card: {
   updatedAt: number
 }): ClaudeTaskRecord {
   return {
+    source: card.source,
     id: card.id,
     title: card.title,
     description: card.spec,

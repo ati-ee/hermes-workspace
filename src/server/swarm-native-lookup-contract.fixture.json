@@ -1,0 +1,495 @@
+{
+ "bridge_sha256": "9a0c9f922a83025b60b4747f3b4f8ab251bb68aad78bea54ea2c9299f8e38038",
+ "harness_sha256": "53fc6918ccb5bca3c029b29812359be6233429e6a38598f50425569e80683743",
+ "native_capability": "original-input-lookup-v1",
+ "native_checkout_canonical_input_lookup_sha256": "4e4ee4b74daa60c8387d4573f85035b6d42a2a597367220fb5d4a3094cc3faab",
+ "native_checkout_session_input_lookup_sha256": "afa9865340d8c9227ea6d892283f28475a8e381b8ffcec9e267b270c7a700c4b",
+ "scenarios": {
+  "lost_before_admission": {
+   "lookup": {
+    "counters": {
+     "db_writes": 0,
+     "scheduled": 0,
+     "unchanged": true
+    },
+    "counts": {
+     "admissions": 0,
+     "sessions": 1
+    },
+    "epoch": 2,
+    "result": {
+     "lookup": {
+      "admission": null,
+      "binding": null,
+      "input_id": "__RECORDED_INPUT_ID__",
+      "principal_binding": "f4ca06edd08bf198a9dc823d1038a2338810302f710cfcb9b9c30a398f8f436a",
+      "proof": null,
+      "reason": null,
+      "ref": {
+       "profile_id": "__RECORDED_PROFILE__",
+       "session_id": "local-contract-synthetic-0001"
+      },
+      "settled": false,
+      "state": "not_found",
+      "version": "original-input-lookup-v1"
+     },
+     "sessionId": "local-contract-synthetic-0001"
+    },
+    "step": "lookup"
+   },
+   "prepare": {
+    "binding": {
+     "idle_fence": {
+      "expected_generation": 0
+     },
+     "input_id": "__RECORDED_INPUT_ID__",
+     "payload_fingerprint": "4590802273ae71de233506dcab7c086994579f479c820bedbdc2eb2f9cec3fe7",
+     "principal_binding": "f4ca06edd08bf198a9dc823d1038a2338810302f710cfcb9b9c30a398f8f436a",
+     "ref": {
+      "profile_id": "__RECORDED_PROFILE__",
+      "session_id": "local-contract-synthetic-0001"
+     },
+     "version": "original-input-lookup-v1"
+    },
+    "counters": {
+     "db_writes": 0,
+     "scheduled": 0,
+     "unchanged": true
+    },
+    "counts": {
+     "admissions": 0,
+     "sessions": 1
+    },
+    "epoch": 1,
+    "step": "prepare"
+   }
+  },
+  "owner_unavailable": {
+   "lookup": {
+    "counters": {
+     "db_writes": 0,
+     "scheduled": 0,
+     "unchanged": true
+    },
+    "counts": {
+     "admissions": 1,
+     "sessions": 1
+    },
+    "epoch": 3,
+    "result": {
+     "lookup": {
+      "admission": null,
+      "binding": null,
+      "input_id": "__RECORDED_INPUT_ID__",
+      "principal_binding": "f4ca06edd08bf198a9dc823d1038a2338810302f710cfcb9b9c30a398f8f436a",
+      "proof": null,
+      "reason": "runtime_retired",
+      "ref": {
+       "profile_id": "__RECORDED_PROFILE__",
+       "session_id": "local-contract-synthetic-0001"
+      },
+      "settled": false,
+      "state": "unavailable",
+      "version": "original-input-lookup-v1"
+     },
+     "sessionId": "local-contract-synthetic-0001"
+    },
+    "step": "lookup"
+   },
+   "prepare": {
+    "binding": {
+     "idle_fence": {
+      "expected_generation": 0
+     },
+     "input_id": "__RECORDED_INPUT_ID__",
+     "payload_fingerprint": "4590802273ae71de233506dcab7c086994579f479c820bedbdc2eb2f9cec3fe7",
+     "principal_binding": "f4ca06edd08bf198a9dc823d1038a2338810302f710cfcb9b9c30a398f8f436a",
+     "ref": {
+      "profile_id": "__RECORDED_PROFILE__",
+      "session_id": "local-contract-synthetic-0001"
+     },
+     "version": "original-input-lookup-v1"
+    },
+    "counters": {
+     "db_writes": 0,
+     "scheduled": 0,
+     "unchanged": true
+    },
+    "counts": {
+     "admissions": 0,
+     "sessions": 1
+    },
+    "epoch": 1,
+    "step": "prepare"
+   },
+   "submit": {
+    "counters": {
+     "db_writes": 0,
+     "scheduled": 1
+    },
+    "counts": {
+     "admissions": 1,
+     "sessions": 1
+    },
+    "epoch": 2,
+    "generation_observed": 0,
+    "receipt": {
+     "admission_id": "46febcbc557d4b6c8db660dad779b2bf",
+     "authority_epoch": 2,
+     "execution_generation": null,
+     "outcome": null,
+     "ref": {
+      "profile_id": "__RECORDED_PROFILE__",
+      "session_id": "local-contract-synthetic-0001"
+     },
+     "sequence": 1,
+     "status": "queued"
+    },
+    "step": "submit"
+   }
+  },
+  "payload_mismatch": {
+   "lookup": {
+    "counters": {
+     "db_writes": 0,
+     "scheduled": 0,
+     "unchanged": true
+    },
+    "counts": {
+     "admissions": 1,
+     "sessions": 1
+    },
+    "epoch": 3,
+    "result": {
+     "lookup": {
+      "admission": null,
+      "binding": "mismatch",
+      "input_id": "__RECORDED_INPUT_ID__",
+      "principal_binding": "f4ca06edd08bf198a9dc823d1038a2338810302f710cfcb9b9c30a398f8f436a",
+      "proof": null,
+      "reason": null,
+      "ref": {
+       "profile_id": "__RECORDED_PROFILE__",
+       "session_id": "local-contract-synthetic-0001"
+      },
+      "settled": false,
+      "state": "found",
+      "version": "original-input-lookup-v1"
+     },
+     "sessionId": "local-contract-synthetic-0001"
+    },
+    "step": "lookup"
+   },
+   "prepare": {
+    "binding": {
+     "idle_fence": {
+      "expected_generation": 0
+     },
+     "input_id": "__RECORDED_INPUT_ID__",
+     "payload_fingerprint": "4590802273ae71de233506dcab7c086994579f479c820bedbdc2eb2f9cec3fe7",
+     "principal_binding": "f4ca06edd08bf198a9dc823d1038a2338810302f710cfcb9b9c30a398f8f436a",
+     "ref": {
+      "profile_id": "__RECORDED_PROFILE__",
+      "session_id": "local-contract-synthetic-0001"
+     },
+     "version": "original-input-lookup-v1"
+    },
+    "counters": {
+     "db_writes": 0,
+     "scheduled": 0,
+     "unchanged": true
+    },
+    "counts": {
+     "admissions": 0,
+     "sessions": 1
+    },
+    "epoch": 1,
+    "step": "prepare"
+   },
+   "submit": {
+    "counters": {
+     "db_writes": 0,
+     "scheduled": 1
+    },
+    "counts": {
+     "admissions": 1,
+     "sessions": 1
+    },
+    "epoch": 2,
+    "generation_observed": 0,
+    "receipt": {
+     "admission_id": "4bd50f1e3d3d47a8af009e669a845146",
+     "authority_epoch": 2,
+     "execution_generation": null,
+     "outcome": null,
+     "ref": {
+      "profile_id": "__RECORDED_PROFILE__",
+      "session_id": "local-contract-synthetic-0001"
+     },
+     "sequence": 1,
+     "status": "queued"
+    },
+    "step": "submit"
+   }
+  },
+  "queued": {
+   "inspect": {
+    "counters": {
+     "db_writes": 0,
+     "scheduled": 0
+    },
+    "counts": {
+     "admissions": 1,
+     "sessions": 1
+    },
+    "epoch": 4,
+    "receipt": {
+     "admission_id": "3a9b49a83751481f8a9128d81a3ab966",
+     "authority_epoch": 2,
+     "execution_generation": null,
+     "outcome": null,
+     "ref": {
+      "profile_id": "__RECORDED_PROFILE__",
+      "session_id": "local-contract-synthetic-0001"
+     },
+     "sequence": 1,
+     "status": "queued"
+    },
+    "step": "inspect"
+   },
+   "lookup": {
+    "counters": {
+     "db_writes": 0,
+     "scheduled": 0,
+     "unchanged": true
+    },
+    "counts": {
+     "admissions": 1,
+     "sessions": 1
+    },
+    "epoch": 3,
+    "result": {
+     "lookup": {
+      "admission": {
+       "admission_id": "3a9b49a83751481f8a9128d81a3ab966",
+       "authority_epoch": 2,
+       "execution_generation": null,
+       "outcome": null,
+       "sequence": 1,
+       "status": "queued"
+      },
+      "binding": "exact",
+      "input_id": "__RECORDED_INPUT_ID__",
+      "principal_binding": "f4ca06edd08bf198a9dc823d1038a2338810302f710cfcb9b9c30a398f8f436a",
+      "proof": {
+       "idle_fence": {
+        "expected_generation": 0
+       },
+       "payload_fingerprint": "4590802273ae71de233506dcab7c086994579f479c820bedbdc2eb2f9cec3fe7"
+      },
+      "reason": null,
+      "ref": {
+       "profile_id": "__RECORDED_PROFILE__",
+       "session_id": "local-contract-synthetic-0001"
+      },
+      "settled": false,
+      "state": "found",
+      "version": "original-input-lookup-v1"
+     },
+     "sessionId": "local-contract-synthetic-0001"
+    },
+    "step": "lookup"
+   },
+   "prepare": {
+    "binding": {
+     "idle_fence": {
+      "expected_generation": 0
+     },
+     "input_id": "__RECORDED_INPUT_ID__",
+     "payload_fingerprint": "4590802273ae71de233506dcab7c086994579f479c820bedbdc2eb2f9cec3fe7",
+     "principal_binding": "f4ca06edd08bf198a9dc823d1038a2338810302f710cfcb9b9c30a398f8f436a",
+     "ref": {
+      "profile_id": "__RECORDED_PROFILE__",
+      "session_id": "local-contract-synthetic-0001"
+     },
+     "version": "original-input-lookup-v1"
+    },
+    "counters": {
+     "db_writes": 0,
+     "scheduled": 0,
+     "unchanged": true
+    },
+    "counts": {
+     "admissions": 0,
+     "sessions": 1
+    },
+    "epoch": 1,
+    "step": "prepare"
+   },
+   "submit": {
+    "counters": {
+     "db_writes": 0,
+     "scheduled": 1
+    },
+    "counts": {
+     "admissions": 1,
+     "sessions": 1
+    },
+    "epoch": 2,
+    "generation_observed": 0,
+    "receipt": {
+     "admission_id": "3a9b49a83751481f8a9128d81a3ab966",
+     "authority_epoch": 2,
+     "execution_generation": null,
+     "outcome": null,
+     "ref": {
+      "profile_id": "__RECORDED_PROFILE__",
+      "session_id": "local-contract-synthetic-0001"
+     },
+     "sequence": 1,
+     "status": "queued"
+    },
+    "step": "submit"
+   }
+  },
+  "settled_terminal": {
+   "inspect": {
+    "counters": {
+     "db_writes": 0,
+     "scheduled": 0
+    },
+    "counts": {
+     "admissions": 1,
+     "sessions": 1
+    },
+    "epoch": 5,
+    "receipt": {
+     "admission_id": "30b440cdcd35440cbed85e3d62041c06",
+     "authority_epoch": 3,
+     "execution_generation": 1,
+     "outcome": "completed",
+     "ref": {
+      "profile_id": "__RECORDED_PROFILE__",
+      "session_id": "local-contract-synthetic-0001"
+     },
+     "sequence": 1,
+     "status": "terminal"
+    },
+    "step": "inspect"
+   },
+   "lookup": {
+    "counters": {
+     "db_writes": 0,
+     "scheduled": 0,
+     "unchanged": true
+    },
+    "counts": {
+     "admissions": 1,
+     "sessions": 1
+    },
+    "epoch": 4,
+    "result": {
+     "lookup": {
+      "admission": {
+       "admission_id": "30b440cdcd35440cbed85e3d62041c06",
+       "authority_epoch": 3,
+       "execution_generation": 1,
+       "outcome": "completed",
+       "sequence": 1,
+       "status": "terminal"
+      },
+      "binding": "exact",
+      "input_id": "__RECORDED_INPUT_ID__",
+      "principal_binding": "f4ca06edd08bf198a9dc823d1038a2338810302f710cfcb9b9c30a398f8f436a",
+      "proof": {
+       "idle_fence": {
+        "expected_generation": 0
+       },
+       "payload_fingerprint": "4590802273ae71de233506dcab7c086994579f479c820bedbdc2eb2f9cec3fe7"
+      },
+      "reason": null,
+      "ref": {
+       "profile_id": "__RECORDED_PROFILE__",
+       "session_id": "local-contract-synthetic-0001"
+      },
+      "settled": true,
+      "state": "found",
+      "version": "original-input-lookup-v1"
+     },
+     "sessionId": "local-contract-synthetic-0001"
+    },
+    "step": "lookup"
+   },
+   "prepare": {
+    "binding": {
+     "idle_fence": {
+      "expected_generation": 0
+     },
+     "input_id": "__RECORDED_INPUT_ID__",
+     "payload_fingerprint": "4590802273ae71de233506dcab7c086994579f479c820bedbdc2eb2f9cec3fe7",
+     "principal_binding": "f4ca06edd08bf198a9dc823d1038a2338810302f710cfcb9b9c30a398f8f436a",
+     "ref": {
+      "profile_id": "__RECORDED_PROFILE__",
+      "session_id": "local-contract-synthetic-0001"
+     },
+     "version": "original-input-lookup-v1"
+    },
+    "counters": {
+     "db_writes": 0,
+     "scheduled": 0,
+     "unchanged": true
+    },
+    "counts": {
+     "admissions": 0,
+     "sessions": 1
+    },
+    "epoch": 1,
+    "step": "prepare"
+   },
+   "settle": {
+    "counters": {
+     "db_writes": 0,
+     "scheduled": 0
+    },
+    "counts": {
+     "admissions": 1,
+     "sessions": 1
+    },
+    "epoch": 3,
+    "settled_admission": "30b440cdcd35440cbed85e3d62041c06",
+    "step": "settle"
+   },
+   "submit": {
+    "counters": {
+     "db_writes": 0,
+     "scheduled": 1
+    },
+    "counts": {
+     "admissions": 1,
+     "sessions": 1
+    },
+    "epoch": 2,
+    "generation_observed": 0,
+    "receipt": {
+     "admission_id": "30b440cdcd35440cbed85e3d62041c06",
+     "authority_epoch": 2,
+     "execution_generation": null,
+     "outcome": null,
+     "ref": {
+      "profile_id": "__RECORDED_PROFILE__",
+      "session_id": "local-contract-synthetic-0001"
+     },
+     "sequence": 1,
+     "status": "queued"
+    },
+    "step": "submit"
+   }
+  }
+ },
+ "schema": "workspace-c2-native-contract/1",
+ "session": "local-contract-synthetic-0001",
+ "tokens": {
+  "input_id": "__RECORDED_INPUT_ID__",
+  "profile": "__RECORDED_PROFILE__"
+ }
+}

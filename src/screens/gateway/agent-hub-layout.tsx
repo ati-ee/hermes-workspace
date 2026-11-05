@@ -69,15 +69,8 @@ function deriveAgentRows(agents: AgentHubLayoutProps['agents'], sessions: Gatewa
     .sort((a, b) => readTimestamp(b.updatedAt) - readTimestamp(a.updatedAt))
     .slice(0, 6)
 
-  if (recent.length === 0) {
-    return [
-      { id: 'placeholder-1', name: 'Nova', modelId: 'auto', status: 'idle' as const, lastLine: 'Waiting for first mission…', taskCount: 0, roleDescription: 'Worker' },
-      { id: 'placeholder-2', name: 'Pixel', modelId: 'auto', status: 'idle' as const, lastLine: 'Standing by…', taskCount: 0, roleDescription: 'Worker' },
-      { id: 'placeholder-3', name: 'Blaze', modelId: 'auto', status: 'idle' as const, lastLine: 'Ready to build.', taskCount: 0, roleDescription: 'Worker' },
-    ]
-  }
+  if (recent.length === 0) return []
 
-  const NAMES = ['Nova', 'Pixel', 'Blaze', 'Echo', 'Sage', 'Drift']
   return recent.map((session, i) => {
     const updatedAt = readTimestamp(session.updatedAt)
     const statusText = `${readText(session.status)} ${readText(session.kind)}`.toLowerCase()
@@ -87,7 +80,7 @@ function deriveAgentRows(agents: AgentHubLayoutProps['agents'], sessions: Gatewa
 
     return {
       id: readText(session.key) || `session-${i}`,
-      name: NAMES[i % NAMES.length],
+      name: getSessionLabel(session),
       modelId: readText(session.model) || 'auto',
       status,
       lastLine: readText(session.task) || getSessionLabel(session),

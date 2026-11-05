@@ -3,11 +3,11 @@
  */
 import { createFileRoute } from '@tanstack/react-router'
 import { isAuthenticated } from '../../server/auth-middleware'
+import { dashboardProxyFetch as dashboardFetch } from '../../server/dashboard-auth-response'
 import {
   BEARER_TOKEN,
   CLAUDE_API,
   CLAUDE_UPGRADE_INSTRUCTIONS,
-  dashboardFetch,
   ensureGatewayProbed,
 } from '../../server/gateway-capabilities'
 import {

@@ -5,6 +5,7 @@ import { existsSync, readFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { isAuthenticated } from '../../server/auth-middleware'
+import { legacyControlRefusal } from '../../server/swarm-legacy-control'
 import { rosterByWorkerId } from '../../server/swarm-roster'
 import { resolveSwarmModelLabel } from '../../server/swarm-model-resolver'
 import { syncSwarmProfileModel } from '../../server/swarm-profile-config'
@@ -174,6 +175,8 @@ export const Route = createFileRoute('/api/swarm-tmux-start')({
           )
         }
 
+        const refusal = legacyControlRefusal(workerId)
+        if (refusal) return refusal
         const profilesDir = getProfilesDir()
         const profilePath = join(profilesDir, workerId)
         // Skip the existsSync gate; tmux new-session will fail loudly if the

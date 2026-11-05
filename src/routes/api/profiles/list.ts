@@ -1,7 +1,10 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { json } from '@tanstack/react-start'
+import { dashboardAuthResponse } from '../../../server/dashboard-auth-response'
 import { isAuthenticated } from '../../../server/auth-middleware'
 import { listProfilesWithFallback } from '../../../server/profiles-browser'
+import { configuredArgusProfiles } from '../../../server/swarm-profile-policy'
+import { visibleArgusIdentities } from '../../../lib/argus-swarm-policy'
 
 export const Route = createFileRoute('/api/profiles/list')({
   server: {
@@ -13,8 +16,11 @@ export const Route = createFileRoute('/api/profiles/list')({
         try {
           const { profiles, activeProfile } =
             await listProfilesWithFallback()
-          return json({ profiles, activeProfile })
+          const configured = new Set(configuredArgusProfiles({ includePrimary: true }).map((profile) => profile.workerId))
+          return json({ profiles: visibleArgusIdentities(profiles).filter((profile) => configured.has(profile.name)), activeProfile })
         } catch (error) {
+          const auth = dashboardAuthResponse(error)
+          if (auth) return auth
           return json(
             {
               error:

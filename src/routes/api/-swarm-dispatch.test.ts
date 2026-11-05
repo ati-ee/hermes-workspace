@@ -1,4 +1,6 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
+
+
 import {
   buildHermesChatQueryArgs,
   buildHermesTmuxLaunchCommand,
@@ -8,6 +10,9 @@ import {
   runtimeCheckpointSignature,
   runtimeSnapshotIsFresh,
 } from './swarm-dispatch'
+
+// Pure helper contracts: importing the route must not probe a real gateway/dashboard.
+vi.mock('../../server/gateway-capabilities', () => ({ dashboardFetch: vi.fn(), ensureGatewayProbed: vi.fn(), getResolvedUrls: vi.fn(), BEARER_TOKEN: '', CLAUDE_API: 'http://synthetic.invalid' }))
 
 describe('checkpointFromRuntimeSnapshot', () => {
   it('maps runtime lifecycle fields into a structured checkpoint', () => {

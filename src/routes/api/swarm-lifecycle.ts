@@ -1,6 +1,7 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { json } from '@tanstack/react-start'
 import { isAuthenticated } from '../../server/auth-middleware'
+import { legacyControlRefusal } from '../../server/swarm-legacy-control'
 import {
   autoSweepLifecycle,
   getSwarmLifecycleStatus,
@@ -28,6 +29,8 @@ export const Route = createFileRoute('/api/swarm-lifecycle')({
         const url = new URL(request.url)
         const requested = validWorkerId(url.searchParams.get('workerId'))
         const ids = requested ? [requested] : listSwarmWorkerIds()
+        const refusal = legacyControlRefusal(...ids)
+        if (refusal) return refusal
         return json({ ok: true, checkedAt: Date.now(), workers: ids.map((id) => getSwarmLifecycleStatus(id)) })
       },
       POST: async ({ request }) => {
@@ -38,11 +41,15 @@ export const Route = createFileRoute('/api/swarm-lifecycle')({
         const workerIdMaybe = validWorkerId(body.workerId)
         if (action === 'auto-sweep') {
           const targets = workerIdMaybe ? [workerIdMaybe] : listSwarmWorkerIds()
+          const refusal = legacyControlRefusal(...targets)
+          if (refusal) return refusal
           const sweep = await autoSweepLifecycle(targets)
           return json({ ok: true, action, sweep })
         }
         if (!workerIdMaybe) return json({ ok: false, error: 'workerId required' }, { status: 400 })
         const workerId = workerIdMaybe
+        const refusal = legacyControlRefusal(workerId)
+        if (refusal) return refusal
         if (action === 'request-handoff') {
           const result = await requestWorkerHandoff(workerId)
           return json({ ok: result.ok, workerId, action, ...result })

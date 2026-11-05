@@ -171,14 +171,8 @@ export type MissionHistoryEntry = {
 const HISTORY_STORAGE_KEY = 'conductor:history'
 const MAX_HISTORY_ENTRIES = 50
 
-const AGENT_NAMES = ['Nova', 'Pixel', 'Blaze', 'Echo', 'Sage', 'Drift', 'Flux', 'Volt']
-const AGENT_EMOJIS = ['🤖', '⚡', '🔥', '🌊', '🌿', '💫', '🔮', '⭐']
-
-function getAgentPersona(index: number) {
-  return {
-    name: AGENT_NAMES[index % AGENT_NAMES.length],
-    emoji: AGENT_EMOJIS[index % AGENT_EMOJIS.length],
-  }
+function getAgentPersona(_index: number, profile: string) {
+  return { name: profile, emoji: 'Agent' }
 }
 
 function extractTasksFromPlan(planText: string): Array<ConductorTask> {
@@ -1055,15 +1049,13 @@ export function useConductorGateway() {
       const checkpoint = assignment.checkpoint
       const isComplete = state === 'checkpointed' || state === 'done' || state === 'cancelled'
       const isBlocked = state === 'blocked' || state === 'needs_input'
-      const personaNames = ['Nova', 'Pixel', 'Blaze', 'Echo', 'Sage', 'Drift', 'Flux', 'Volt']
-      const persona = personaNames[index % personaNames.length]
       return {
         key: workerId,
         label: workerId,
-        model: 'native-swarm',
+        model: null,
         status: isComplete ? 'complete' : isBlocked ? 'stale' : 'running',
         updatedAt: missionUpdatedAt,
-        displayName: `${persona} · ${state}`,
+        displayName: `${workerId} · ${state}`,
         totalTokens: 0,
         contextTokens: 0,
         tokenUsageLabel: state,
@@ -1072,7 +1064,7 @@ export function useConductorGateway() {
           label: workerId,
           friendlyId: workerId,
           status: isComplete ? 'completed' : 'running',
-          model: 'native-swarm',
+          model: undefined,
           lastMessage: null,
           createdAt: missionStatusQuery.data?.updatedAt ?? Date.now(),
           startedAt: missionStatusQuery.data?.updatedAt ?? Date.now(),
@@ -1340,7 +1332,7 @@ export function useConductorGateway() {
       outputPath,
     })
     const workerDetails = workers.map((worker, index) => {
-      const persona = getAgentPersona(index)
+      const persona = getAgentPersona(index, worker.label)
       return {
         label: worker.label,
         model: worker.model ?? '',

@@ -1,5 +1,8 @@
 import { useEffect } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
+import type { NativeProfileStatus } from '@/server/swarm-native-status'
+import type { TerminalContext } from '@/lib/argus-main'
+import { ARGUS_EXECUTION_IDS, executionState } from '@/lib/argus-swarm-policy'
 
 export type CrewPlatformInfo = {
   state: 'connected' | 'disconnected' | string
@@ -7,6 +10,9 @@ export type CrewPlatformInfo = {
 }
 
 export type CrewMember = {
+  terminalContext?: TerminalContext
+  reasoningEffort?: string | null
+  nativeEvidence?: NativeProfileStatus
   id: string
   displayName: string
   humanLabel?: string
@@ -40,10 +46,14 @@ export type CrewStatus = {
 export type CrewOnlineStatus = 'online' | 'offline' | 'unknown'
 
 export function getOnlineStatus(member: CrewMember): CrewOnlineStatus {
-  if (!member.profileFound) return 'unknown'
-  if (member.gatewayState === 'unknown') return 'unknown'
-  if (member.gatewayState === 'running' && member.processAlive) return 'online'
-  return 'offline'
+  const evidence = member.nativeEvidence
+  if (!evidence || !evidence.observedAt || Date.now() - evidence.observedAt > 60_000) return 'unknown'
+  return evidence.connected ? 'online' : evidence.state === 'offline' ? 'offline' : 'unknown'
+}
+
+export function getCrewExecutionState(member: CrewMember, now = Date.now()) {
+  const evidence = member.nativeEvidence
+  return executionState({ ...evidence, status: evidence?.state }, now)
 }
 
 const QUERY_KEY = ['crew', 'status'] as const
@@ -78,7 +88,7 @@ export function useCrewStatus() {
   }, [queryClient])
 
   return {
-    crew: query.data?.crew ?? [],
+    crew: (query.data?.crew ?? []).filter((member, index, rows) => ARGUS_EXECUTION_IDS.includes(member.id) && rows.findIndex((row) => row.id === member.id) === index).map((member) => query.isError && member.nativeEvidence ? { ...member, nativeEvidence: { ...member.nativeEvidence, connected: false, state: 'unknown' as const, error: 'workspace_native_status_unavailable' } } : member),
     lastUpdated: query.data?.fetchedAt ?? null,
     isLoading: query.isLoading,
     isFetching: query.isFetching,

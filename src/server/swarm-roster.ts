@@ -19,6 +19,7 @@ const WorkerIdSchema = z
 
 export const SwarmRosterWorkerSchema = z.object({
   id: WorkerIdSchema,
+  archived: z.boolean().optional(),
   name: z.string().default(''),
   role: z.string().default('Worker'),
   specialty: z.string().default(''),
@@ -113,7 +114,7 @@ export function fallbackRoster(ids: Array<string> = []): SwarmRoster {
   }
 }
 
-export function readSwarmRoster(ids: Array<string> = []): SwarmRoster {
+export function readSwarmRoster(ids: Array<string> = [], options?: { includeArchived?: boolean }): SwarmRoster {
   if (!existsSync(SWARM_ROSTER_PATH)) return fallbackRoster(ids)
   try {
     const raw = yaml.parse(readFileSync(SWARM_ROSTER_PATH, 'utf-8')) as unknown
@@ -122,7 +123,7 @@ export function readSwarmRoster(ids: Array<string> = []): SwarmRoster {
     for (const fallback of fallbackRoster(ids).workers) {
       if (!byId.has(fallback.id)) byId.set(fallback.id, fallback)
     }
-    return { version: parsed.version, workers: [...byId.values()] }
+    return { version: parsed.version, workers: [...byId.values()].filter(worker => options?.includeArchived || !worker.archived) }
   } catch {
     return fallbackRoster(ids)
   }
@@ -136,9 +137,15 @@ export function writeSwarmRoster(roster: SwarmRoster): void {
 
 export function upsertSwarmRosterWorker(input: SwarmRosterUpsert, ids: Array<string> = []): SwarmRoster {
   const nextWorker = SwarmRosterUpsertSchema.parse(input)
-  const current = readSwarmRoster(ids)
+  const current = readSwarmRoster(ids, { includeArchived: true })
   const byId = new Map(current.workers.map((worker) => [worker.id, worker]))
-  byId.set(nextWorker.id, nextWorker)
+  const previous = byId.get(nextWorker.id)
+  const updated = SwarmRosterUpsertSchema.parse({
+    ...previous,
+    ...input,
+    ...(nextWorker.archived === undefined && previous ? { archived: previous.archived } : {}),
+  })
+  byId.set(nextWorker.id, updated)
   const next: SwarmRoster = {
     version: current.version || 1,
     workers: [...byId.values()].sort((a, b) => {
@@ -151,8 +158,8 @@ export function upsertSwarmRosterWorker(input: SwarmRosterUpsert, ids: Array<str
   return next
 }
 
-export function rosterByWorkerId(ids: Array<string> = []): Map<string, SwarmRosterWorker> {
-  return new Map(readSwarmRoster(ids).workers.map((worker) => [worker.id, worker]))
+export function rosterByWorkerId(ids: Array<string> = [], options?: { includeArchived?: boolean }): Map<string, SwarmRosterWorker> {
+  return new Map(readSwarmRoster(ids, options).workers.map((worker) => [worker.id, worker]))
 }
 
 export function resolveSwarmWorkerDisplayName(workerId: string, worker?: Pick<SwarmRosterWorker, 'name'> | null): string {

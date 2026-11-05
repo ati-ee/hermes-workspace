@@ -16,6 +16,8 @@
  * `null` so the UI can hide just that card.
  */
 
+import { DashboardAuthError } from './dashboard-native-auth'
+
 export type DashboardOverview = {
   status: DashboardStatusSection | null
   platforms: Array<DashboardPlatformEntry>
@@ -245,7 +247,8 @@ async function safeJson<T>(
     const res = await fetcher(path)
     if (!res.ok) return null
     return (await res.json()) as T
-  } catch {
+  } catch (error) {
+    if (error instanceof DashboardAuthError) throw error
     return null
   }
 }

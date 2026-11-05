@@ -3,6 +3,7 @@ import { appendFileSync, existsSync, mkdirSync, readFileSync, statSync } from 'n
 import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { getProfilesDir } from './claude-paths'
+import { assertLegacyControlAllowed } from './swarm-legacy-control'
 import { SWARM_MEMORY_ROOT } from './swarm-environment'
 import { appendSwarmMemoryEvent } from './swarm-memory'
 import type {ChildProcess} from 'node:child_process';
@@ -99,6 +100,7 @@ function recommendedAction(state: SwarmContextState): string {
 }
 
 export function getSwarmLifecycleStatus(workerId: string, policy = DEFAULT_POLICY): SwarmLifecycleStatus {
+  assertLegacyControlAllowed(workerId)
   const profilePath = join(getProfilesDir(), workerId)
   let parsed: Record<string, unknown> = {}
   try {
@@ -192,6 +194,7 @@ function useNativeProcess(): boolean {
 
 /** Send a prompt to a worker's stdin (native) or tmux pane (Unix fallback) */
 export function sendToWorker(workerId: string, prompt: string): Promise<{ ok: boolean; error?: string }> {
+  assertLegacyControlAllowed(workerId)
   if (useNativeProcess()) {
     return sendToWorkerProcess(workerId, prompt)
   }
@@ -338,6 +341,7 @@ function readRuntimeMissionContext(workerId: string): { missionId: string | null
 }
 
 export async function requestWorkerHandoff(workerId: string): Promise<{ ok: boolean; handoffPath: string; error?: string }> {
+  assertLegacyControlAllowed(workerId)
   const hp = handoffPath(workerId)
   mkdirSync(dirname(hp), { recursive: true })
   const localHandoff = join(getProfilesDir(), workerId, 'memory', 'handoffs', 'latest.md')
@@ -358,6 +362,7 @@ export async function requestWorkerHandoff(workerId: string): Promise<{ ok: bool
 }
 
 export function notifyHandoffWritten(workerId: string): void {
+  assertLegacyControlAllowed(workerId)
   const ctx = readRuntimeMissionContext(workerId)
   try {
     appendSwarmMemoryEvent({
@@ -398,6 +403,7 @@ function tmuxStart(workerId: string): Promise<{ ok: boolean; error?: string }> {
 }
 
 export async function renewWorker(workerId: string): Promise<{ ok: boolean; restarted: boolean; resumeSent: boolean; error?: string; handoffPath: string }> {
+  assertLegacyControlAllowed(workerId)
   const hp = handoffPath(workerId)
   if (!existsSync(hp)) {
     return { ok: false, restarted: false, resumeSent: false, error: 'Handoff missing; request handoff first', handoffPath: hp }
@@ -428,6 +434,7 @@ export async function renewWorker(workerId: string): Promise<{ ok: boolean; rest
 }
 
 export async function autoSweepLifecycle(workerIds: Array<string>): Promise<Array<{ workerId: string; action: 'none' | 'request-handoff' | 'renew'; status: SwarmLifecycleStatus; result?: { ok: boolean; error?: string } }>> {
+  workerIds.forEach(assertLegacyControlAllowed)
   const out: Array<{ workerId: string; action: 'none' | 'request-handoff' | 'renew'; status: SwarmLifecycleStatus; result?: { ok: boolean; error?: string } }> = []
   for (const workerId of workerIds) {
     const status = getSwarmLifecycleStatus(workerId)

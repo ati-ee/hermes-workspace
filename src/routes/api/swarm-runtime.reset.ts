@@ -2,7 +2,8 @@ import { createFileRoute } from '@tanstack/react-router'
 import { json } from '@tanstack/react-start'
 import { isAuthenticated } from '../../server/auth-middleware'
 import { requireJsonContentType } from '../../server/rate-limit'
-import { resetSwarmWorkerRuntimes, resolveResetTargetWorkerIds } from '../../server/swarm-runtime-reset'
+import { legacyControlRefusal } from '../../server/swarm-legacy-control'
+import { listResettableSwarmWorkerIds, resetSwarmWorkerRuntimes, resolveResetTargetWorkerIds } from '../../server/swarm-runtime-reset'
 
 type ResetBody = {
   workerIds?: unknown
@@ -41,6 +42,8 @@ export const Route = createFileRoute('/api/swarm-runtime/reset')({
           ? body.workerIds.filter((value): value is string => typeof value === 'string')
           : undefined
 
+        const refusal = legacyControlRefusal(...(requestedWorkerIds?.length ? requestedWorkerIds : listResettableSwarmWorkerIds()))
+        if (refusal) return refusal
         const targets = resolveResetTargetWorkerIds(requestedWorkerIds)
         if (!targets.ok || !targets.workerIds) {
           return json({ ok: false, error: targets.error ?? 'Unable to resolve worker ids' }, { status: 400 })

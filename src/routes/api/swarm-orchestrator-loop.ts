@@ -7,6 +7,7 @@ import { getProfilesDir } from '../../server/claude-paths'
 import { newestCheckpointFromMessages, readRuntimeJson, type ParsedSwarmCheckpoint } from '../../server/swarm-checkpoints'
 import { readWorkerMessages } from '../../server/swarm-chat-reader'
 import { getSwarmProfilePath, listSwarmWorkerIds } from '../../server/swarm-foundation'
+import { assertLegacyControlAllowed, assertLegacyProfileWriteAllowed, legacyControlRefusal } from '../../server/swarm-legacy-control'
 import { appendMissionContinuation, markMissionAssignmentsReviewedByWorker, recordMissionCheckpoint } from '../../server/swarm-missions'
 import { appendSwarmMemoryEvent } from '../../server/swarm-memory'
 import { publishSwarmActionPrompt, publishSwarmCheckpointNotification } from '../../server/swarm-notifications'
@@ -90,8 +91,11 @@ function runtimePatchFromCheckpoint(workerId: string, checkpoint: ParsedSwarmChe
   }
 }
 
-function writeRuntimePatch(workerId: string, patch: Record<string, unknown>, dryRun: boolean): string {
+/** Legacy writer: guard direct callers before even a dry-run profile inspection. */
+export function writeRuntimePatch(workerId: string, patch: Record<string, unknown>, dryRun: boolean): string {
+  assertLegacyControlAllowed(workerId)
   const profilePath = getSwarmProfilePath(workerId)
+  assertLegacyProfileWriteAllowed(profilePath)
   const runtimePath = join(profilePath, 'runtime.json')
   if (dryRun) return runtimePath
   mkdirSync(profilePath, { recursive: true })
@@ -153,8 +157,11 @@ function recordCheckpoint(input: {
   return { notification, missionRecorded: Boolean(mission) }
 }
 
-function runWorkerLoop(workerId: string, staleMs: number, dryRun: boolean): WorkerLoopResult {
+/** Legacy transcript loop; native receipt-driven execution uses a separate path. */
+export function runWorkerLoop(workerId: string, staleMs: number, dryRun: boolean): WorkerLoopResult {
+  assertLegacyControlAllowed(workerId)
   const profilePath = join(getProfilesDir(), workerId)
+  assertLegacyProfileWriteAllowed(profilePath)
   const runtimePath = join(profilePath, 'runtime.json')
   const current = readRuntimeJson(runtimePath)
   const chat = readWorkerMessages(profilePath, 40)
@@ -373,6 +380,8 @@ export const Route = createFileRoute('/api/swarm-orchestrator-loop')({
 
         const requested = validWorkerIds(body.workerIds)
         const workerIds = requested.length ? requested : listSwarmWorkerIds()
+        const refusal = legacyControlRefusal(...workerIds, ...validWorkerIds([body.reviewWorkerId]))
+        if (refusal) return refusal
         const staleMinutes = typeof body.staleMinutes === 'number' && Number.isFinite(body.staleMinutes)
           ? Math.max(1, Math.min(240, body.staleMinutes))
           : 10

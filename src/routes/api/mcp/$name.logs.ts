@@ -1,6 +1,7 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { json } from '@tanstack/react-start'
 import { isAuthenticated } from '../../../server/auth-middleware'
+import { dashboardAuthResponse } from '../../../server/dashboard-auth-response'
 import {
   CLAUDE_UPGRADE_INSTRUCTIONS,
   dashboardFetch,
@@ -56,6 +57,8 @@ export const Route = createFileRoute('/api/mcp/$name/logs')({
           })
         } catch (err) {
           request.signal.removeEventListener('abort', onClientAbort)
+          const auth = dashboardAuthResponse(err)
+          if (auth) return auth
           return json(
             { ok: false, error: err instanceof Error ? err.message : String(err) },
             { status: 502 },

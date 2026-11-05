@@ -1,3 +1,5 @@
+import { useHermesProfileIdentities } from '@/hooks/use-hermes-profile-identities'
+import { configuredRoute, workerRouteLabel } from '@/lib/hermes-worker-identity'
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { HugeiconsIcon } from '@hugeicons/react'
@@ -96,8 +98,6 @@ const QUICK_ACTIONS: Array<{
   },
 ]
 
-const AGENT_NAMES = ['Nova', 'Pixel', 'Blaze', 'Echo', 'Sage', 'Drift', 'Flux', 'Volt']
-const AGENT_EMOJIS = ['🤖', '⚡', '🔥', '🌊', '🌿', '💫', '🔮', '⭐']
 const BLENDED_COST_PER_MILLION_TOKENS = 5
 const CONDUCTOR_GOAL_DRAFT_STORAGE_KEY = 'conductor:goal-draft'
 
@@ -121,11 +121,8 @@ function persistConductorGoalDraft(value: string): void {
   }
 }
 
-function getAgentPersona(index: number) {
-  return {
-    name: AGENT_NAMES[index % AGENT_NAMES.length],
-    emoji: AGENT_EMOJIS[index % AGENT_EMOJIS.length],
-  }
+function getAgentPersona(_index: number, profile: string) {
+  return { name: profile, emoji: 'Agent' }
 }
 
 function estimateTokenCost(totalTokens: number): number {
@@ -175,7 +172,7 @@ function MissionCostSection({ totalTokens, workers, expanded, onToggle }: { tota
                 {workers.map((worker) => (
                   <div key={worker.id} className="flex items-center gap-3 px-4 py-3 text-sm">
                     <span className="font-medium text-[var(--theme-text)]">
-                      {worker.personaEmoji} {worker.personaName}
+                      Agent {worker.label}
                     </span>
                     <span className="min-w-0 flex-1 truncate text-[var(--theme-muted)]">{worker.label}</span>
                     <span className="text-xs text-[var(--theme-muted)]">{worker.totalTokens.toLocaleString()} tok</span>
@@ -337,8 +334,9 @@ function WorkerCard({
   conductor: Pick<ReturnType<typeof useConductorGateway>, 'workerOutputs' | 'isPaused' | 'pausedAtMs' | 'missionStartedAt'>
   now: number
 }) {
+  const profiles = useHermesProfileIdentities().data ?? []
   const dot = getWorkerDot(worker.status)
-  const persona = getAgentPersona(index)
+  const persona = getAgentPersona(index, worker.label)
   const workerOutput = conductor.workerOutputs[worker.key] ?? getLastAssistantMessage(worker.raw.messages as HistoryMessage[] | undefined)
   const workerStartedAt = typeof worker.raw.createdAt === 'string' ? worker.raw.createdAt : typeof worker.raw.startedAt === 'string' ? worker.raw.startedAt : conductor.missionStartedAt
   const workerEndTime =
@@ -364,7 +362,7 @@ function WorkerCard({
       <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
         <div className="rounded-xl border border-[var(--theme-border)] bg-[var(--theme-card2)] px-3 py-2">
           <p className="text-[var(--theme-muted)]">Model</p>
-          <p className="mt-1 truncate text-[var(--theme-text)]">{getShortModelName(worker.model)}</p>
+          <p className="mt-1 truncate text-[var(--theme-text)]">{workerRouteLabel(worker, profiles)}</p>
         </div>
         <div className="rounded-xl border border-[var(--theme-border)] bg-[var(--theme-card2)] px-3 py-2">
           <p className="text-[var(--theme-muted)]">Tokens</p>
@@ -444,9 +442,8 @@ function usePreviewAvailability(previewUrl: string | null, enabled: boolean) {
 }
 
 function getShortModelName(model: string | null | undefined): string {
-  if (!model) return 'Unknown'
-  const parts = model.split('/')
-  return parts[parts.length - 1] || model
+  if (!model || model === 'native-swarm' || model === 'auto') return 'Execution provider/model not reported'
+  return model
 }
 
 function getModelDisplayName(model: AvailableModel | undefined, modelId: string | null | undefined): string {
@@ -710,8 +707,30 @@ function deriveSessionStatus(session: GatewaySession): 'running' | 'completed' |
   return 'running'
 }
 
+function HermesProfilesPanel() {
+  const query = useHermesProfileIdentities()
+  return (
+    <section aria-label="Hermes profile routes" className="my-4 rounded-2xl border border-[var(--theme-border)] bg-[var(--theme-card)] p-4">
+      <h2 className="text-sm font-semibold text-[var(--theme-text)]">Hermes profiles - configured provider / model</h2>
+      <p className="mt-1 text-xs text-[var(--theme-muted)]">Current configuration only. This does not prove which model executed a past mission.</p>
+      {query.isPending ? <p role="status">Loading Hermes profiles...</p> : query.isError ? (
+        <p role="alert">Hermes profiles could not be loaded. No worker identities are inferred.</p>
+      ) : query.data?.length ? (
+        <ul className="mt-3 grid gap-2 text-xs md:grid-cols-2">
+          {query.data.map(profile => <li key={profile.name} className="rounded-xl bg-[var(--theme-bg)] p-2">
+            <strong className="text-[var(--theme-text)]">{profile.name}</strong>
+            <span className="mt-1 block text-[var(--theme-muted)]">{configuredRoute(profile)}</span>
+          </li>)}
+        </ul>
+      ) : <p role="status">No configured Hermes profiles found.</p>}
+    </section>
+  )
+}
+
 export function Conductor() {
   const conductor = useConductorGateway()
+  const profilesQuery = useHermesProfileIdentities()
+  const profiles = profilesQuery.data ?? []
   const [goalDraft, setGoalDraft] = useState(() => loadConductorGoalDraft())
   const [missionModalOpen, setMissionModalOpen] = useState(false)
   const [continueDraft, setContinueDraft] = useState('')
@@ -905,7 +924,7 @@ export function Conductor() {
   const completeMissionCostWorkers = useMemo<MissionCostWorker[]>(
     () =>
       conductor.workers.map((worker, index) => {
-        const persona = getAgentPersona(index)
+        const persona = getAgentPersona(index, worker.label)
         return {
           id: worker.key,
           label: worker.label,
@@ -922,48 +941,25 @@ export function Conductor() {
         id: `${selectedHistoryEntry?.id ?? 'history'}-${index}`,
         label: worker.label,
         totalTokens: worker.totalTokens,
-        personaEmoji: worker.personaEmoji,
-        personaName: worker.personaName,
+        personaEmoji: 'Agent',
+        personaName: worker.label,
       })),
     [selectedHistoryEntry],
   )
-  const OFFICE_NAMES = ['Nova', 'Pixel', 'Blaze', 'Echo', 'Sage', 'Drift']
-  const homeOfficeRows = useMemo<AgentWorkingRow[]>(() => {
-    const sessions = conductor.recentSessions
-    if (sessions.length === 0) {
-      return OFFICE_NAMES.slice(0, 3).map((name, i) => ({
-        id: `placeholder-${i}`,
-        name,
-        modelId: 'auto',
-        status: 'idle' as const,
-        lastLine: 'Waiting for work…',
-        taskCount: 0,
-        roleDescription: 'Worker',
-      }))
-    }
-    return sessions.slice(0, 6).map((session, i) => {
-      const s = session as GatewaySession
-      const updatedAt = typeof s.updatedAt === 'string' ? new Date(s.updatedAt).getTime() : typeof s.updatedAt === 'number' ? s.updatedAt : 0
-      const statusText = `${s.status ?? ''} ${s.kind ?? ''}`.toLowerCase()
-      const status = /error|failed/.test(statusText) ? ('error' as const) : /pause/.test(statusText) ? ('paused' as const) : Date.now() - updatedAt < 120_000 ? ('active' as const) : ('idle' as const)
-      return {
-        id: s.key ?? `session-${i}`,
-        name: OFFICE_NAMES[i % OFFICE_NAMES.length],
-        modelId: s.model ?? 'auto',
-        status,
-        lastLine: s.task ?? s.label ?? s.title ?? s.derivedTitle ?? 'Working…',
-        lastAt: updatedAt || undefined,
-        taskCount: 0,
-        roleDescription: s.label ?? 'Worker',
-        sessionKey: s.key ?? undefined,
-      }
-    })
-  }, [conductor.recentSessions])
+  const homeOfficeRows = useMemo<AgentWorkingRow[]>(() => profiles.map(profile => ({
+    id: profile.name,
+    name: profile.name,
+    modelId: `Configured: ${configuredRoute(profile)}`,
+    status: 'idle',
+    lastLine: 'Configured Hermes profile; no execution claimed',
+    taskCount: 0,
+    roleDescription: profile.name,
+  })), [profiles])
 
   const officeAgentRows = useMemo<AgentWorkingRow[]>(() => {
     if (conductor.workers.length > 0) {
       return conductor.workers.map((worker, index) => {
-        const persona = getAgentPersona(index)
+        const persona = getAgentPersona(index, worker.label)
         const currentTask = conductor.tasks.find((task) => task.workerKey === worker.key && task.status === 'running')?.title
         const lastLine = conductor.workerOutputs[worker.key] ?? getLastAssistantMessage(worker.raw.messages as HistoryMessage[] | undefined)
         const isWorkerPaused = conductor.isPaused && (worker.status === 'running' || worker.status === 'idle')
@@ -971,7 +967,7 @@ export function Conductor() {
         return {
           id: worker.key,
           name: persona.name,
-          modelId: worker.model || 'auto',
+          modelId: workerRouteLabel(worker, profiles),
           roleDescription: worker.displayName,
           status: isWorkerPaused ? 'paused' : worker.status === 'complete' ? 'idle' : worker.status === 'stale' ? 'error' : 'active',
           lastLine: isWorkerPaused ? 'Paused' : lastLine,
@@ -986,7 +982,7 @@ export function Conductor() {
     return [
       {
         id: 'conductor-placeholder-agent',
-        name: 'Nova',
+        name: 'Awaiting worker assignment',
         modelId: conductor.conductorSettings.workerModel || 'auto',
         roleDescription: 'Waiting for workers',
         status: 'spawning',
@@ -996,7 +992,7 @@ export function Conductor() {
         sessionKey: 'conductor-placeholder-agent',
       },
     ]
-  }, [conductor.conductorSettings.workerModel, conductor.goal, conductor.isPaused, conductor.tasks, conductor.workerOutputs, conductor.workers])
+  }, [conductor.conductorSettings.workerModel, conductor.goal, conductor.isPaused, conductor.tasks, conductor.workerOutputs, conductor.workers, profiles])
 
   const completePhaseProjectPath = useMemo(() => {
     const workerOutputTexts = [...Object.values(conductor.workerOutputs), ...conductor.workers.map((worker) => getLastAssistantMessage(worker.raw.messages as HistoryMessage[] | undefined))].filter(
@@ -1084,7 +1080,7 @@ export function Conductor() {
       conductor.workers.map((worker) => getLastAssistantMessage(worker.raw.messages as HistoryMessage[] | undefined)).find((output) => output.trim()) ??
       conductor.streamText
     return truncateContinuationText(summarySource ?? '')
-  }, [completeSummary, conductor.streamText, conductor.workerOutputs, conductor.workers])
+  }, [completeSummary, conductor.streamText, conductor.workerOutputs, conductor.workers, profiles])
   const continuationModalPreview = useMemo(() => truncateContinuationText(continuationPreview, 200), [continuationPreview])
   const hasMissionHistory = conductor.missionHistory.length > 0
   const canResetSavedState = hasMissionHistory || conductor.hasPersistedMission
@@ -1216,13 +1212,14 @@ export function Conductor() {
                     <p className="text-sm text-[var(--theme-muted)]">No summary captured.</p>
                   )}
                 </div>
+                <HermesProfilesPanel />
                 {historyWorkerDetails.length > 0 && (
                   <div className="mt-4 space-y-2">
                     {historyWorkerDetails.map((worker: MissionHistoryWorkerDetail, index) => (
                       <div key={`${selectedHistoryEntry.id}-worker-${index}`} className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm">
                         <span className={cn('size-2 rounded-full', selectedHistoryEntry.status === 'completed' ? 'bg-emerald-400' : 'bg-red-400')} />
                         <span className="font-medium text-[var(--theme-text)]">
-                          {worker.personaEmoji} {worker.personaName}
+                          Agent {worker.label}
                         </span>
                         <span className="text-[var(--theme-muted)]">{worker.label}</span>
                         <span className="ml-auto text-xs text-[var(--theme-muted)]">
@@ -1352,6 +1349,7 @@ export function Conductor() {
               <p className="text-sm text-[var(--theme-muted-2)]">Launch a mission and watch your agent team build it live.</p>
             </div>
 
+            <HermesProfilesPanel />
             <section className="h-[280px] overflow-hidden rounded-3xl border border-[var(--theme-border)] bg-[var(--theme-card)] shadow-[0_24px_80px_var(--theme-shadow)] md:h-[520px]">
               <OfficeView
                 agentRows={homeOfficeRows}
@@ -2028,7 +2026,7 @@ export function Conductor() {
                   .map((worker, index) => {
                     const output = (conductor.workerOutputs[worker.key] ?? getLastAssistantMessage(worker.raw.messages as HistoryMessage[] | undefined)).trim()
                     if (!output) return null
-                    const persona = getAgentPersona(index)
+                    const persona = getAgentPersona(index, worker.label)
                     return {
                       key: worker.key,
                       persona,
@@ -2123,8 +2121,8 @@ export function Conductor() {
               {conductor.workers.length > 0 && (
                 <div className="mt-4 space-y-2">
                   {conductor.workers.map((worker, index) => {
-                    const persona = getAgentPersona(index)
-                    const shortModelName = getShortModelName(worker.model)
+                    const persona = getAgentPersona(index, worker.label)
+                    const shortModelName = workerRouteLabel(worker, profiles)
                     return (
                       <div key={worker.key} className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm">
                         <span className="size-2 rounded-full bg-emerald-400" />
@@ -2316,6 +2314,7 @@ export function Conductor() {
               </div>
             </section>
           )}
+          <HermesProfilesPanel />
           <section className="max-h-[clamp(200px,40vh,360px)] overflow-hidden rounded-3xl border border-[var(--theme-border)] bg-[var(--theme-card)] shadow-[0_24px_80px_var(--theme-shadow)]">
             <OfficeView agentRows={officeAgentRows} missionRunning onViewOutput={() => {}} processType="parallel" companyName="Conductor Office" containerHeight={360} hideHeader />
           </section>
