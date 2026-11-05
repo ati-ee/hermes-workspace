@@ -5,6 +5,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Source candidate — server-authored C2-1 raw RPC boundary repair (not deployed)
+- Validate the complete Native `prompt.prepare_input` and `prompt.lookup_input` responses before extraction: closed nested keys, exact version/reference/principal/input/fingerprint/fence, safe JSON integers, and admission/state/settlement consistency. Expanded or malformed evidence cannot submit or positively reconcile UNKNOWN; valid nonpositive owner receipts remain nonpositive without retry/release fallback.
+- Add independent Python execute/RPC regression cases using fresh real accepted Native authority/SQLite receipts behind explicitly labelled discovery/transport fixtures. Re-record the existing five-scenario contract fixture through its unchanged recorder; no expected response is hand-edited.
+- Adapt only the W1 test's browser fixture to the original JSDOM window's real Storage under Node 26. Preserve all seven W1 production UI paths and all original identity/no-fabrication assertions.
+- Author checks: 167 boundary/recording tests plus 11 unchanged existing-session bridge tests through the official Native runner; 313 guarded tests in the same 30 Workspace files on each existing Node 22 and Node 26 tool. Baseline full TSC 92 and original targeted ESLint 11 diagnostics remain non-green with no diagnostic-identity changes; W1 test-only lint separately retains its seven baseline diagnostics.
+- Derived only from the existing server f49 source, owning review and accepted Native contracts, without importing another private candidate. Independent Reviewer acceptance, Root canonical commit binding/OS build/C2/publication/live and the original real-GPU roundtrip remain separate gates. See `docs/argus-c2-handover.md`.
+
 ### Source candidate — Workspace C2 client / P-1 batch preparation (not deployed)
 - Consume the separately sealed Native `original-input-lookup-v1` contract. Persist the exact prepared original-attempt principal/ref/fingerprint/fence binding before existing-session submission; reconcile a lost ACK read-only, bind matched admission ownership once, and preserve sticky UNKNOWN/reservations on absent, mismatched or unavailable evidence.
 - Make prospective batch create+stage all-or-nothing before Native calls, with synchronous latest-store revalidation and duplicate/profile/session contention checks. Retain all post-submit rows and individual receipts; preserve initial/correction/accepted-continuation flows and seven W1 identity/model UI paths.

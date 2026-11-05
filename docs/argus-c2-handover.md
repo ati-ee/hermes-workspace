@@ -1,5 +1,51 @@
 # Workspace C2/P-1 source handover and knowledge record
 
+## Server-authored C2-1 follow-up (author evidence, not acceptance)
+
+This new unit starts from immutable tree `f49fb0c68725682633618123ace691e0f35701e2`.
+The existing owning review closed P-1 independently and rejected C2-1 because Python projected
+unknown raw response fields away before validation. This correction validates the entire raw
+prepare/lookup result at that actual RPC boundary before returning any binding/lookup object.
+It rejects nested expansion, missing/wrong-typed fields, future versions/states, unsafe integers,
+foreign bindings and inconsistent terminal/settled evidence. Exact fenced submission and sticky
+UNKNOWN are unchanged; no release, unlock, resubmit or session/principal fallback is introduced.
+
+The authority used here is the already-present accepted Native commit
+`ee1dce0c19d82e212b61bb0e8a7fb04fe5311251`, tree
+`05b14ec18c786d558ce6eb049901812d5328c06e`. Its actual SDK/handler source is unchanged.
+All inputs were already on the authorized server; no other private candidate/source/vector was
+accessed or imported. Prior packets and seals are immutable. The follow-up has `revision: null`
+until Root binds a real canonical commit; a tree is not a commit.
+
+The new `scripts/test_swarm_native_raw_responses.py` runs in a private official Native test overlay:
+copy it to `tests/gateway/test_workspace_c21_boundary.py`, and copy the bridge and unchanged recorder
+to adjacent `workspace_c21_inputs/`. Use the accepted Native environment's unchanged
+`scripts/run_tests.sh --files-from <owned-list>`. The official environment and additional pre-import
+socket/process audit fence precede candidate imports. Test homes/configs/stores are fresh synthetic
+fixtures, never installed profiles. Receipt creation uses real AuthorityConnection/parser/SQLite;
+transport/discovery/inventory and scheduling are explicitly inert fixtures. Prepare/lookup each
+assert zero writes/schedules and unchanged state; submit commits one test admission and increments
+only an inert scheduling counter, never executing a model. This is not OS network-namespace isolation,
+a live gateway ticket/socket test or cross-process C2 integration.
+
+The same recorder regenerated `swarm-native-lookup-contract.fixture.json` from that owner through
+the official runner; its bytes were copied unchanged. Genuine queued/terminal positives and
+not-found/mismatch/unavailable nonpositives retain their actual semantics. Node 22 and Node 26
+both pass the same 30 guarded Workspace files (313 tests each), preserving P-1/authWeakSet/same-origin,
+source default-off, lost-ACK/UNKNOWN and the seven production W1 paths. The W1 test now obtains its
+real browser Storage from Vitest's original `jsdom.window`, not Node 26's unrelated Web Storage
+global or Vitest's rewritten `document.defaultView` alias; no fake Storage implementation is used.
+
+Final official Python run: 167 new boundary/recording cases and 11 unchanged B2 bridge cases pass.
+The first old-f49 boundary run had 50 failures/24 passes (74 initial cases); Node 26 reproduced the
+original W1 setItem failure. Intermediate implementation/harness failures are retained outside Git,
+not credited as GREEN. Existing full TSC stays 92 errors (exit 2), original targeted ESLint 11
+(exit 1), and extra W1 test-only lint seven (exit 1), with exact path/code/message diagnostic
+multisets unchanged versus isolated f49. Full lint/typecheck is not green. The external source
+report/author checks contain hashes, guard statuses and reconstruction evidence. Root and the same
+Reviewer own independent source acceptance and later OSbuild/C2/canonical binding/publication/live;
+the real original-task GPU result is still a separate gate, not a source-author claim.
+
 ## State and lineage
 
 Author candidate only; independent review and Root qualification pending. Base commit

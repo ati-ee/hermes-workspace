@@ -40,18 +40,85 @@ LOOKUP_KEYS = ('version', 'state', 'reason', 'ref', 'input_id', 'principal_bindi
 HEX64 = re.compile(r'[0-9a-f]{64}')
 
 
+MAX_SAFE_INTEGER = 2**53 - 1
+
+
+def _closed(value, keys) -> bool:
+    return isinstance(value, dict) and set(value) == set(keys)
+
+
+def _safe_integer(value, minimum=0) -> bool:
+    # Native integers cross a JSON/JavaScript boundary; bool and lossy numbers are not integers here.
+    return type(value) is int and minimum <= value <= MAX_SAFE_INTEGER
+
+
+def _reference(value) -> bool:
+    return (_closed(value, ('profile_id', 'session_id'))
+            and all(isinstance(item, str) and item for item in value.values()))
+
+
 def valid_binding(binding, request_id) -> bool:
-    """The exact ``prompt.prepare_input`` result shape for this request id (nothing more, nothing less)."""
-    if not isinstance(binding, dict) or set(binding) != set(BINDING_KEYS):
+    """Validate the COMPLETE Native prepare result, including its closed nested schemas."""
+    if not _closed(binding, BINDING_KEYS):
         return False
-    ref, fence = binding['ref'], binding['idle_fence']
-    return (binding['version'] == LOOKUP_CAPABILITY and binding['input_id'] == request_id
-            and isinstance(ref, dict) and set(ref) == {'profile_id', 'session_id'}
-            and all(isinstance(value, str) and value for value in ref.values())
+    return (binding['version'] == LOOKUP_CAPABILITY
+            and isinstance(binding['input_id'], str) and 1 <= len(binding['input_id']) <= 1024
+            and binding['input_id'] == request_id and _reference(binding['ref'])
             and all(isinstance(binding[key], str) and HEX64.fullmatch(binding[key]) is not None
                     for key in ('principal_binding', 'payload_fingerprint'))
-            and isinstance(fence, dict) and set(fence) == {'expected_generation'}
-            and type(fence['expected_generation']) is int and fence['expected_generation'] >= 0)
+            and _closed(binding['idle_fence'], ('expected_generation',))
+            and _safe_integer(binding['idle_fence']['expected_generation']))
+
+
+def valid_lookup(found, binding, request_id) -> bool:
+    """Closed Native canonical_input_lookup result, before any projection or positive rebind.
+
+    The accepted owner contract has three states. Only found/exact carries admission/proof;
+    genuine mismatch, not_found and unavailable receipts remain nonpositive and unchanged.
+    """
+    if not (_closed(found, LOOKUP_KEYS) and found['version'] == LOOKUP_CAPABILITY
+            and _reference(found['ref']) and found['ref'] == binding['ref']
+            and isinstance(found['input_id'], str) and found['input_id'] == request_id
+            and found['principal_binding'] == binding['principal_binding']
+            and type(found['settled']) is bool):
+        return False
+    empty = (found['binding'] is None and found['admission'] is None
+             and found['proof'] is None and found['settled'] is False)
+    if found['state'] == 'unavailable':
+        return (empty and isinstance(found['reason'], str)
+                and found['reason'] in {'runtime_retired', 'runtime_draining', 'stale_epoch', 'storage_unavailable'})
+    if found['reason'] is not None:
+        return False
+    if found['state'] == 'not_found':
+        return empty
+    if found['state'] != 'found':
+        return False
+    if found['binding'] == 'mismatch':
+        return found['admission'] is None and found['proof'] is None and found['settled'] is False
+    if found['binding'] != 'exact':
+        return False
+    admission, proof = found['admission'], found['proof']
+    if not (_closed(admission, ('admission_id', 'sequence', 'status', 'outcome',
+                               'authority_epoch', 'execution_generation'))
+            and _closed(proof, ('payload_fingerprint', 'idle_fence'))
+            and isinstance(proof['payload_fingerprint'], str)
+            and HEX64.fullmatch(proof['payload_fingerprint']) is not None
+            and proof['payload_fingerprint'] == binding['payload_fingerprint']
+            and _closed(proof['idle_fence'], ('expected_generation',))
+            and _safe_integer(proof['idle_fence']['expected_generation'])
+            and proof['idle_fence'] == binding['idle_fence']
+            and isinstance(admission['admission_id'], str) and admission['admission_id']
+            and _safe_integer(admission['sequence'], 1)
+            and _safe_integer(admission['authority_epoch'])
+            and (admission['execution_generation'] is None
+                 or _safe_integer(admission['execution_generation']))
+            and isinstance(admission['status'], str)
+            and admission['status'] in {'queued', 'started', 'unknown', 'terminal'}):
+        return False
+    if admission['status'] == 'terminal':
+        return (found['settled'] is True and isinstance(admission['outcome'], str)
+                and bool(admission['outcome']))
+    return found['settled'] is False and admission['outcome'] is None
 
 
 def submit_params(sid: str, request: dict, generation: int) -> dict:
@@ -63,7 +130,12 @@ def submit_params(sid: str, request: dict, generation: int) -> dict:
 async def prepare_original_input(client, sid: str, request: dict, generation: int) -> dict:
     """Pure owner preparation (``prompt.prepare_input``): no write, admission, attach or session."""
     prepared = await client.rpc('prompt.prepare_input', **submit_params(sid, request, generation))
-    return {key: prepared.get(key) for key in BINDING_KEYS}
+    if not (valid_binding(prepared, request['requestId']) and _safe_integer(generation)
+            and prepared['ref']['session_id'] == sid
+            and ('profileHome' not in request or prepared['ref']['profile_id'] == request['profileHome'])
+            and prepared['idle_fence']['expected_generation'] == generation):
+        raise ValueError('native_input_prepare_invalid')
+    return prepared
 
 
 async def fenced_submit(client, sid: str, request: dict, binding: dict) -> dict:
@@ -76,7 +148,9 @@ async def lookup_original_input(client, request: dict) -> dict:
     binding = request['inputBinding']
     found = await client.rpc('prompt.lookup_input', session_id=binding['ref']['session_id'], input_id=request['requestId'],
                              payload_fingerprint=binding['payload_fingerprint'], idle_fence=binding['idle_fence'])
-    return {'sessionId': binding['ref']['session_id'], 'lookup': {key: found.get(key) for key in LOOKUP_KEYS}}
+    if not valid_lookup(found, binding, request['requestId']):
+        raise ValueError('native_input_lookup_invalid')
+    return {'sessionId': binding['ref']['session_id'], 'lookup': found}
 
 
 def _listed(listing: dict, sid: str):

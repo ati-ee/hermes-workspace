@@ -19,7 +19,11 @@ const { Conductor } = await import('./conductor')
 const FAKE = ['Nova', 'Pixel', 'Blaze', 'Echo', 'Sage', 'Drift', 'Flux', 'Volt']
 
 let root: Root | undefined
-beforeEach(() => vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true))
+beforeEach(() => {
+  vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true)
+  // Use the real JSDOM browser store, not Node 26's unrelated Web Storage global.
+  vi.stubGlobal('localStorage', (globalThis as typeof globalThis & { jsdom: { window: Window } }).jsdom.window.localStorage)
+})
 afterEach(async () => {
   await act(async () => root?.unmount())
   root = undefined
