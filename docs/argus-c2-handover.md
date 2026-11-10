@@ -1,5 +1,40 @@
 # Workspace C2/P-1 source handover and knowledge record
 
+## PR2 direct blocked-to-completed correction (source candidate, not deployed)
+
+Base: actual public PR2 head `d817c110f94a694a5e0f3f584e3c7b92f752223b` (parent main `e1d37d8…`),
+tree `393574f8299fe9c82d5c7222868c4924ed8d850d`, byte-exact to the gen42 source unit. Root reports
+Reviewer57 closed the five PR1 findings and Root's Node26 network-none build/340 tests passed on that
+tree; those facts are not re-executed or extended here and do not qualify this new source.
+
+Defect (GitHub PR2 P2, reproduced): `use-conductor-gateway.ts` sets `streamError` for a native
+`blocked` status. If the next poll reports `completed` directly, the clear condition (queued/running/
+reviewing only) is skipped and the completed branch kept the error, so history saved `failed` and the
+complete view rendered "Mission Stopped" for a genuine success.
+
+Correction: the blocked branch records its exact message in a ref; queued/running/reviewing and failed
+paths reset it. On authoritative native `completed`, only that exact obsolete blocker is cleared with a
+functional update in the same effect that sets `phase='complete'`, so history persists `completed`.
+Any other error (user stop, failure, non-native) is preserved; failed/cancelled never become success.
+Waiting/blocked polling/persistence, same-session/current-assignment selection, P1/UNKNOWN, auth,
+allowlist, default-off and all other source are unchanged.
+
+Author checks (unchanged guard, caller-private HOME/XDG/TMP, existing Node runtimes, no installs):
+- Exact d817 product + same final test file: 1 FAIL (`expected 'Synthetic native blocker' to be null`)
+  / 5 PASS. Candidate: 6/6. The new blocked-to-failed control passes on both (characterization).
+- Full guarded selection Node26.12.1: 33 files / 342 PASS, guard exit 0, attempts 0 / outbound 0.
+  Focused Node22.23.4: conductor regression + W1 files 11/11.
+- Full TSC 92/92 (exit 2) and touched-file ESLint 13/13 (exit 1): no introduced/removed identities.
+  Baselines remain non-green. No build was run here; Root's exact-head OS build for this source is pending.
+- Test harness note: JSDOM Storage instance properties are storage keys, so history writes are observed
+  through the real Storage prototype method. The active board has no error panel; the visible error
+  surface is the complete view (`Mission Complete` vs `Mission Stopped`).
+- No PC1eb/private payload, private roster/config/profile/route/auth/state, live API/gateway/model/GPU,
+  GitHub write, new role/session/card/model or package install. revision null; no commit by this author.
+
+Remaining gates: same-Reviewer exact-source review, Root final OS build, update of the same PR2,
+explicitly authorized merge, then live and real original-task GPU qualification.
+
 ## PR1 integration regression correction (new source candidate, not deployed)
 
 This unit is based on the real fetched ownfork commit

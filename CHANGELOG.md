@@ -5,6 +5,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Source candidate — PR2 direct blocked-to-completed status fix (not deployed)
+- A native mission observed `blocked` and then directly `completed` (no intermediate queued/running/reviewing poll) kept the obsolete blocker as `streamError`, so the hook saved a genuinely completed mission as failed and showed "Mission Stopped". Authoritative native completion now clears only the exact blocker message from the latest native blocked observation, in the same update that enters `complete`, before history persistence. Failed/cancelled terminals and unrelated errors are unchanged.
+- Real-hook JSDOM regression: blocked poll, then the next timed poll returns completed directly; asserts no error, "Mission Complete" UI, exactly one completed history entry and no failed/blocker history write. A direct blocked-to-failed control keeps failed status and its terminal error. Exact public d817/tree393 product with the same test: 1 FAIL / 5 PASS; candidate 6/6. Full guarded selection 33 files/342 PASS on Node26; focused Node22 11/11. TSC 92 and touched-file ESLint 13 diagnostics unchanged by identity (non-green baseline). Root final OS build and same-Reviewer review remain pending.
+
 ### Source candidate — PR1 integration regressions (not deployed)
 - Align checked-in sample roster ids/profiles and AGENTS contract with the unchanged six-identity execution policy. Metadata is not installed profile/config/tool evidence; private roster migration remains explicit and operator-owned, with no aliases or profile bootstrap.
 - Select the latest applicable exact profile/session admission across correction/continuation history; preserve current Native running/waiting/unknown evidence instead of publishing an earlier terminal turn as current completion.

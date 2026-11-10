@@ -925,6 +925,8 @@ export function useConductorGateway() {
   const [selectedHistoryEntry, setSelectedHistoryEntry] = useState<MissionHistoryEntry | null>(null)
   const [conductorSettings, setConductorSettings] = useState<ConductorSettings>(() => loadConductorSettings())
   const doneRef = useRef(initialMission?.phase === 'complete')
+  // Exact message set by the latest native blocked observation, never another error source.
+  const nativeBlockerRef = useRef<string | null>(null)
   const seenToolCallRef = useRef(false)
   const historySavedRef = useRef(false)
   const lastActivityAtRef = useRef<number>(Date.now())
@@ -1110,13 +1112,23 @@ export function useConductorGateway() {
       // Approval waits and explicit blockers are resumable, not successful terminal deliveries.
       doneRef.current = false
       setCompletedAt(null)
-      setStreamError(status === 'blocked' ? mission.error || 'Native mission blocked' : null)
+      const blocker = status === 'blocked' ? mission.error || 'Native mission blocked' : null
+      nativeBlockerRef.current = blocker
+      setStreamError(blocker)
       setPhase('running')
       return
     }
-    if (mission.nativeSwarm && ['queued', 'running', 'reviewing'].includes(status || '')) setStreamError(null)
+    if (mission.nativeSwarm && ['queued', 'running', 'reviewing'].includes(status || '')) {
+      nativeBlockerRef.current = null
+      setStreamError(null)
+    }
 
     if (isCompletedMissionStatus(status)) {
+      // Authoritative native success supersedes only its own earlier blocker, in the same
+      // update as phase='complete', before history persistence. Other errors stay visible.
+      const obsoleteBlocker = mission.nativeSwarm ? nativeBlockerRef.current : null
+      nativeBlockerRef.current = null
+      if (obsoleteBlocker !== null) setStreamError((current) => (current === obsoleteBlocker ? null : current))
       doneRef.current = true
       setCompletedAt((value) => value ?? new Date().toISOString())
       setPhase('complete')
@@ -1124,6 +1136,7 @@ export function useConductorGateway() {
     }
 
     if (isFailedMissionStatus(status)) {
+      nativeBlockerRef.current = null
       doneRef.current = true
       setStreamError(mission.error || 'Conductor mission failed')
       setCompletedAt((value) => value ?? new Date().toISOString())

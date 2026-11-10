@@ -89,3 +89,48 @@ it('settings UI explains saved routes instead of exposing rejected model selecto
   expect(screen.queryByText('Worker Model')).toBeNull()
   expect(screen.getByText(/existing profile.*provider.*model/i)).toBeTruthy()
 })
+
+function historyWrites(): Array<Array<{ status?: string; error?: string }>> {
+  const writes: Array<Array<{ status?: string; error?: string }>> = []
+  // JSDOM Storage instance properties are storage keys; observe the real prototype method.
+  const proto = Object.getPrototypeOf(localStorage) as Storage
+  const setItem = proto.setItem
+  vi.spyOn(proto, 'setItem').mockImplementation(function (this: Storage, key: string, value: string) {
+    if (key === 'conductor:history') writes.push(JSON.parse(value) as Array<{ status?: string; error?: string }>)
+    setItem.call(this, key, value)
+  })
+  return writes
+}
+it('clears an obsolete native blocker when the next real poll reports completed directly', async () => {
+  missionStatus='blocked'; localStorage.setItem('conductor:active-mission',JSON.stringify(savedMission()))
+  const writes=historyWrites()
+  await mount(<><Probe /><Conductor /></>)
+  await waitFor(() => expect(missionReads).toBeGreaterThan(0))
+  await waitFor(() => expect(api.streamError).toBe('Synthetic native blocker'))
+  expect(api.phase).toBe('running')
+  // The active board has no error panel; the complete view renders streamError as Mission Stopped.
+  const reads=missionReads
+  missionStatus='completed' // No queued/running/reviewing observation in between.
+  await waitFor(() => expect(api.phase).toBe('complete'),{timeout:4000})
+  expect(missionReads).toBeGreaterThan(reads)
+  expect(api.streamError).toBeNull()
+  await waitFor(() => expect(screen.getByText('Mission Complete')).toBeTruthy())
+  expect(screen.queryByText('Mission Stopped')).toBeNull(); expect(document.body.textContent).not.toContain('Synthetic native blocker')
+  await waitFor(() => expect(api.missionHistory).toHaveLength(1))
+  expect(api.missionHistory[0]).toMatchObject({status:'completed'}); expect(api.missionHistory[0].error).toBeUndefined()
+  const saved=JSON.parse(localStorage.getItem('conductor:history')!) as Array<{status:string}>
+  expect(saved).toHaveLength(1); expect(saved[0].status).toBe('completed')
+  expect(writes.length).toBeGreaterThan(0)
+  expect(writes.flat().some(entry => entry.status === 'failed' || entry.error === 'Synthetic native blocker')).toBe(false)
+  expect(posts).toEqual([])
+})
+it('keeps a direct blocked to failed transition failed with its real terminal error', async () => {
+  missionStatus='blocked'; localStorage.setItem('conductor:active-mission',JSON.stringify(savedMission()))
+  await mount(); await waitFor(() => expect(api.streamError).toBe('Synthetic native blocker'))
+  missionStatus='failed'
+  await waitFor(() => expect(api.phase).toBe('complete'),{timeout:4000})
+  expect(api.streamError).toBe('Conductor mission failed')
+  await waitFor(() => expect(api.missionHistory[0]?.status).toBe('failed'))
+  expect(api.missionHistory).toHaveLength(1); expect(api.missionHistory[0].error).toBe('Conductor mission failed')
+  expect(posts).toEqual([])
+})
