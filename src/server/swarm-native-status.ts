@@ -36,22 +36,35 @@ async function readStatus(workerId: string): Promise<NativeProfileStatus> {
     const result = { ...base, observedAt: now, connected: true, sessionId: session?.sessionId || null, sessionTitle: session?.title || null, sessionSource: session?.source || null, model: session?.model || null, provider: session?.provider || null, reasoningEffort: session?.reasoningEffort || null, sessionCwd: session?.sessionCwd || null, task: session?.title || null }
     result.state = executionState({ status: observed.status, observedAt: now, connected: true, model: result.model, provider: result.provider }, now)
     // Only an exact stored native binding can attach a Workspace mission identity to a GUI session.
-    for (const mission of listSwarmMissions(100)) {
-      const assignment = mission.assignments.find((item) => item.workerId === workerId && item.native?.sessionId === result.sessionId)
-      if (!assignment?.native) continue
+    // Histories append corrections/continuations. First choose the last exact binding in
+    // each mission, then the newest applicable dispatch across missions (not latest review time).
+    const candidates = listSwarmMissions(100).flatMap((mission) => {
+      const assignment = [...mission.assignments].reverse().find((item) => item.workerId === workerId
+        && item.native?.profileId === profile.profileHome && item.native.sessionId === result.sessionId)
+      return assignment?.native ? [{ mission, assignment }] : []
+    }).sort((a, b) => (b.assignment.dispatchedAt ?? b.mission.createdAt) - (a.assignment.dispatchedAt ?? a.mission.createdAt))
+    const current = candidates.at(0)
+    if (current?.assignment.native) {
+      const { mission, assignment } = current
+      const native = assignment.native!
+      const live = session?.status === 'started' || ['started', 'active', 'waiting'].includes(observed.status || '')
+      // session.list cannot identify a new admission behind a historical terminal turn.
+      if (live && native.status === 'terminal') return result
       result.missionId = mission.id
       result.boardId = mission.origin?.boardId || null
       result.cardId = mission.origin?.cardId || null
       result.assignmentId = assignment.id
-      result.admissionId = assignment.native.admissionId
+      result.admissionId = native.admissionId
       result.task = assignment.task
-      if (assignment.state === 'checkpointed' && assignment.reviewRequired) result.state = 'review'
-      else if (assignment.state === 'done') result.state = 'completed'
-      else if (assignment.state === 'cancelled') result.state = 'cancelled'
-      else if (assignment.native.status === 'terminal') result.state = assignment.native.outcome === 'completed' ? 'blocked' : ['cancelled', 'interrupted'].includes(assignment.native.outcome || '') ? 'cancelled' : 'failed'
-      else if (now - (assignment.native.observedAt || mission.updatedAt) <= 60_000 && assignment.native.status === 'queued') result.state = 'queued'
+      if (native.status === 'unknown' || native.status === 'submitting') result.state = 'unknown'
       else if (assignment.state === 'needs_input') result.state = 'waiting'
-      break
+      else if (!live && result.state === 'idle') {
+        if (assignment.state === 'checkpointed' && assignment.reviewRequired) result.state = 'review'
+        else if (assignment.state === 'done') result.state = 'completed'
+        else if (assignment.state === 'cancelled') result.state = 'cancelled'
+        else if (native.status === 'terminal') result.state = native.outcome === 'completed' ? 'blocked' : ['cancelled', 'interrupted'].includes(native.outcome || '') ? 'cancelled' : 'failed'
+        else if (now - (native.observedAt || mission.updatedAt) <= 60_000 && native.status === 'queued') result.state = 'queued'
+      }
     }
     return result
   } catch { return { ...base, error: 'native_status_unavailable' } }

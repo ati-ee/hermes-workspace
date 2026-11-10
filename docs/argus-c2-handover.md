@@ -1,5 +1,68 @@
 # Workspace C2/P-1 source handover and knowledge record
 
+## PR1 integration regression correction (new source candidate, not deployed)
+
+This unit is based on the real fetched ownfork commit
+`e1d37d811e8f7dc111d7a43e14c86112fe4ad57d`, tree
+`2f868c382305760c808ca92a2570e96686a0ac0a`. Root reports the preceding C2-1 unit accepted
+by Reviewer54, owner OS build/import and four exact-source C2 ticket/socket/WS/SQLite/store
+scenarios passing with providerattempt0, and PR1 publication/merge approved. Those are Root
+qualification facts, not re-executed or extended by this source author. The closed raw Python
+bridge/recorder/fixture, original P-1 store/UNKNOWN fences and request authority are unchanged.
+The earlier source-only entries below are preserved as history, not current acceptance claims.
+
+All five automatic PR review findings were checked against that exact owning source, not trusted
+as assertions. All five were reproduced and corrected in this bounded unit:
+
+| Finding | Owning correction / regression evidence |
+|---|---|
+| R4483340933 sample roster mismatch | `swarm.yaml` now lists exactly the supported six execution ids with matching profile ids and unknown metadata model; AGENTS describes a sample, not installed bots. Actual configuredProfile policy stays unchanged. Fixture test intersects the checked-in sample with existing disposable profiles and preserves missing/alias/archive/legacy denials. |
+| R4483340948 reused-session history | `swarm-native-status.ts` chooses the last exact profile/session binding in each mission, then the newest applicable dispatch, without mutating history. It preserves live execution/approval/UNKNOWN evidence; a historical terminal turn cannot label an uncorrelated live turn with its old task/admission. Correction, accepted continuation, timestamp ties, foreign refs, queued/running, settled/idle and uncertain observations are covered. |
+| R4483340963 waiting/blocked completion | Actual hook/worker/UI states represent waiting and blocked, keep phase/persistence/polling resumable, and do not write successful history. Managed mission status alone decides terminal completion. Real JSDOM hook tests observe another timed poll, recovery to running and eventual server-reported completed history without POST/resubmit. |
+| R4483340974 persisted model overrides | Remove unsupported selectors and their exclusive catalog/query helpers. Normalized settings retain only projectsDir/maxParallel/supervised at load, save and launch; no default model/provider is chosen. Existing server override refusal is byte-unchanged. Actual hook launch and settings UI tests prove migration/removal. |
+| R4483340982 credential-free discovery | No-key gateway `/v1/models` is used when Dashboard is absent; an available Dashboard remains the supported no-key authenticated context. Optional non-auth catalog failures preserve known models with a generic warning. Genuine Dashboard auth and gateway401/403 remain visible without another credential path. Remote catalog metadata is projected without account/auth fields. Real route-handler fixtures cover both contexts, outages, known models, auth and no config writes. |
+
+### Sample/private roster migration boundary
+
+This is a checked-in sample change only. Do not copy it over a private roster automatically.
+Before any later deployment, the operator must back up and compare the existing private roster,
+retain private metadata/routes/configs, and explicitly align id/profile entries with already-existing
+supported profiles. Missing profiles remain unavailable. Never rename/install real profiles,
+copy config/credentials, provision skills/wrappers, or translate legacy `builder`/`reviewer` ids to
+canonical authority. `default` and `whatsapp` stay identity-only. The server's current private ARGUS
+roster, actual profiles, routes/provider/model, .env and runtime stores were not read or changed.
+
+### Author checks and preservation
+
+- Final new regression cases against pristine e1 product code plus labelled test/selection overlay:
+  19 FAIL /8 PASS in27 cases. Same byte-qualified new tests on candidate:27 PASS. Final combined
+  original30files/313 plus new3files/27 =33files/340 PASS on both existing Node22.23.4 and Node26.12.1.
+  Unchanged network/process guard reports attempts0/outbound0; its CPU tooling queries remain
+  explicitly counted. Test selection adds only the three regression files; guard policy is unchanged.
+- Pristine e1 versus candidate: full TSC92/92 errors, exit2; original targeted ESLint11/11, exit1;
+  all touched TS/TSX/test-config lint60/57, exit1. No introduced diagnostic identities. Only three
+  pre-existing array-type diagnostics disappeared with the now-unused model-selector helpers.
+  No broad baseline cleanup, dependency/lock/runtime upgrade or new package installation.
+- The single guarded production build attempt emitted client/SSR bundles (tool exit0) but the
+  unchanged guard returned3 for tsx net.createConnection to Unix IPC (outbound0). It is NON-GREEN,
+  was not retried/bypassed, and preceded final typed status-helper adjustments. It gives no build
+  qualification to the frozen final tree; Root's final exact-head OS build remains pending.
+- Only two W1 production files change for the explicitly requested current status/settings UI;
+  actual worker identity and configured-versus-reported route behavior/assertions remain. The other
+  five W1 paths, raw bridge/recorder/fixture, P-1/store/auth/default-off/allowlist/security and all
+  non-allowlisted existing files are byte-exact to the base. Legacy model override server rejection
+  and admission routing remain unchanged. No new sessions/admissions/model execution occurred.
+- Source/fixtures were derived on the authorized VPS from fetched ownfork Git and already-present
+  approved tools. No access/import/compare/transfer/proxy of PC1eb or denied private payload.
+  No live API/socket/gateway/provider/GPU/production DB/Windows/WSL/service, sudoers/systemd,
+  credential/grant/opflag/board changes, new role/model/session/card/cron, or GitHub write occurred.
+  No agent/reviewer was spawned or interrupted. Private HOME/XDG/TMP and guard precede imports;
+  these controls are not OS network isolation. Native/Argus acceptance was not reopened.
+
+The external REPORT/AUTHORCHECKS and sealed raw Git inventory bind the final source. Root and an
+independent Reviewer own source acceptance, canonical commit publication, final OS build/runtime,
+main/live and real original-task GPU result return. This unit is not deployment approval.
+
 ## Server-authored C2-1 follow-up (author evidence, not acceptance)
 
 This new unit starts from immutable tree `f49fb0c68725682633618123ace691e0f35701e2`.

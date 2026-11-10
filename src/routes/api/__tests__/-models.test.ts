@@ -10,7 +10,7 @@ const { existsSync, readFileSync, writeFileSync, mkdirSync, statSync, readdirSyn
   readdirSync: vi.fn().mockReturnValue([]),
 }))
 
-const catalogCapabilities = vi.hoisted(() => ({ models: false }))
+const catalogCapabilities = vi.hoisted(() => ({ models: false, dashboard: { available: false } }))
 
 vi.mock('node:fs', () => ({
   default: { existsSync, readFileSync, writeFileSync, mkdirSync, statSync, readdirSync },
@@ -58,6 +58,7 @@ vi.mock('../../../server/local-provider-discovery', () => ({
 beforeEach(() => {
   vi.clearAllMocks()
   catalogCapabilities.models = false
+  catalogCapabilities.dashboard.available = false
   delete process.env.HERMES_HOME
   delete process.env.CLAUDE_HOME
 })
@@ -143,6 +144,7 @@ describe('Dashboard model authentication', () => {
     vi.resetModules()
     const caps = await import('../../../server/gateway-capabilities')
     catalogCapabilities.models = true
+    catalogCapabilities.dashboard.available = true
     vi.mocked(caps.dashboardFetch).mockResolvedValue(new Response(JSON.stringify({providers: [
       {slug: 'anthropic', authenticated: true, models: ['claude-opus'], token: 'must-not-forward'},
       {slug: 'unconfigured', authenticated: false, models: ['hidden']},
@@ -161,6 +163,7 @@ describe('Dashboard model authentication', () => {
     vi.resetModules()
     const caps = await import('../../../server/gateway-capabilities')
     catalogCapabilities.models = true
+    catalogCapabilities.dashboard.available = true
     vi.mocked(caps.dashboardFetch).mockRejectedValue(new Error('Dashboard authentication required'))
     const mod = await import('../models')
     const res = await (mod as any).Route.server.handlers.GET({request: new Request('http://localhost/api/models')})

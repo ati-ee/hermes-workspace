@@ -5,6 +5,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Source candidate — PR1 integration regressions (not deployed)
+- Align checked-in sample roster ids/profiles and AGENTS contract with the unchanged six-identity execution policy. Metadata is not installed profile/config/tool evidence; private roster migration remains explicit and operator-owned, with no aliases or profile bootstrap.
+- Select the latest applicable exact profile/session admission across correction/continuation history; preserve current Native running/waiting/unknown evidence instead of publishing an earlier terminal turn as current completion.
+- Keep native approval waits and blockers resumable with explicit worker/UI states and polling. Managed mission completion/history now requires the actual terminal mission status, not an absence of active workers.
+- Remove unsupported Conductor model-override controls/catalog helpers and migrate persisted settings to supported mission fields. Launch/persistence whitelist those fields; saved Native profile routes remain authoritative and the server's override rejection is unchanged.
+- Preserve credential-free gateway model discovery when Dashboard is absent; use Dashboard only in its advertised context. Keep known local models during optional catalog outages, retain real auth refusals and project only safe remote catalog metadata.
+- Author proof: pristine merged e1 with final regression fixtures yields 19 FAIL / 8 PASS; candidate passes the same 30 existing files/313 tests plus 27 new cases (33 files/340 tests) on existing Node22 and Node26, no test guard denials/outbound. TSC remains92, original targeted lint11; touched lint60->57 removes only three diagnostics with retired selector helpers, introduces none. Guarded build remains NON-GREEN (tool0/guard3, tsx Unix IPC denial); final exact-head OS build and independent source/runtime acceptance remain Root gates. See `docs/argus-c2-handover.md`.
+
 ### Source candidate — server-authored C2-1 raw RPC boundary repair (not deployed)
 - Validate the complete Native `prompt.prepare_input` and `prompt.lookup_input` responses before extraction: closed nested keys, exact version/reference/principal/input/fingerprint/fence, safe JSON integers, and admission/state/settlement consistency. Expanded or malformed evidence cannot submit or positively reconcile UNKNOWN; valid nonpositive owner receipts remain nonpositive without retry/release fallback.
 - Add independent Python execute/RPC regression cases using fresh real accepted Native authority/SQLite receipts behind explicitly labelled discovery/transport fixtures. Re-record the existing five-scenario contract fixture through its unchanged recorder; no expected response is hand-edited.

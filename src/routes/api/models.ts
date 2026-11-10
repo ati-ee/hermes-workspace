@@ -409,31 +409,44 @@ export function normalizeDashboardModels(payload: unknown): Array<ModelEntry> {
   })
 }
 
+class ModelCatalogAccessError extends Error {
+  constructor(public status: number) { super('Hermes model catalog access denied') }
+}
+
 async function fetchClaudeModels(): Promise<Array<ModelEntry>> {
   // The gateway API key and Dashboard OAuth are distinct credentials. Reuse
-  // the signed-in request's Dashboard session when no API key is configured.
-  if (!BEARER_TOKEN) {
+  // the signed-in Dashboard session only when that service is actually advertised.
+  // A credential-free /v1/models gateway does not require Dashboard authentication.
+  if (!BEARER_TOKEN && getGatewayCapabilities().dashboard.available === true) {
     const response = await dashboardFetch('/api/model/options?include_unconfigured=false', {
       signal: AbortSignal.timeout(6000),
     })
     if (!response.ok) {
+      if (response.status === 401 || response.status === 403) throw new ModelCatalogAccessError(response.status)
       throw new Error(`Hermes Dashboard models request failed (${response.status})`)
     }
     return normalizeDashboardModels(await response.json())
   }
-  const response = await fetch(`${CLAUDE_API}/v1/models`, {
-    headers: { Authorization: `Bearer ${BEARER_TOKEN}` },
-    signal: AbortSignal.timeout(6000),
-  })
-  if (!response.ok)
+  let response: Response
+  try {
+    response = await fetch(`${CLAUDE_API}/v1/models`, {
+      headers: BEARER_TOKEN ? { Authorization: `Bearer ${BEARER_TOKEN}` } : {},
+      signal: AbortSignal.timeout(6000),
+    })
+  } catch { throw new Error('Hermes model catalog unavailable') }
+  if (!response.ok) {
+    if (response.status === 401 || response.status === 403) throw new ModelCatalogAccessError(response.status)
     throw new Error(`Hermes models request failed (${response.status})`)
+  }
   const payload = asRecord(await response.json())
   const rawModels = Array.isArray(payload.data)
     ? payload.data
     : Array.isArray(payload.models)
       ? payload.models
       : []
+  // Discovery is metadata-only; upstream auth/account fields never reach the renderer.
   return rawModels.map(normalizeModel).filter((e): e is ModelEntry => e !== null)
+    .map(model => ({ id: model.id, name: model.name, provider: model.provider }))
 }
 
 export const Route = createFileRoute('/api/models')({
@@ -473,10 +486,21 @@ export const Route = createFileRoute('/api/models')({
           // available. Previously, a non-empty models.json stopped here, so the
           // Operations picker only showed the local Workspace subset and drifted
           // from the CLI/backend model universe.
+          const warnings: Array<string> = []
           if (getGatewayCapabilities().models) {
-            const hermesModels = await fetchClaudeModels()
-            models = mergeModelEntries(models, hermesModels)
-            source = source === 'models.json' ? 'models.json+hermes-agent' : 'hermes-agent'
+            try {
+              const hermesModels = await fetchClaudeModels()
+              models = mergeModelEntries(models, hermesModels)
+              source = source === 'models.json' ? 'models.json+hermes-agent' : 'hermes-agent'
+            } catch (error) {
+              const auth = dashboardAuthResponse(error)
+              if (auth) return auth
+              if (error instanceof ModelCatalogAccessError) return json({ ok: false, error: error.message }, { status: error.status })
+              // An optional catalog outage must not erase already-known legitimate models.
+              // Authentication refusals above remain visible and never trigger another credential path.
+              if (models.length === 0) throw error
+              warnings.push('model_catalog_unavailable')
+            }
           }
 
           // Merge live OpenAI-compatible catalogs from base_url entries that
@@ -515,6 +539,7 @@ export const Route = createFileRoute('/api/models')({
             data: models,
             models,
             configuredProviders,
+            warnings,
             source,
             ...streamTimeouts,
           })
