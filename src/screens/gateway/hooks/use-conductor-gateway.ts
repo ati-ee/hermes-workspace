@@ -48,8 +48,6 @@ type ConductorMissionResponse = {
 type MissionPhase = 'idle' | 'decomposing' | 'running' | 'complete'
 
 export type ConductorSettings = {
-  orchestratorModel: string
-  workerModel: string
   projectsDir: string
   maxParallel: number
   supervised: boolean
@@ -58,8 +56,6 @@ export type ConductorSettings = {
 const ACTIVE_MISSION_STORAGE_KEY = 'conductor:active-mission'
 const CONDUCTOR_SETTINGS_STORAGE_KEY = 'conductor-settings'
 const DEFAULT_CONDUCTOR_SETTINGS: ConductorSettings = {
-  orchestratorModel: '',
-  workerModel: '',
   projectsDir: '',
   maxParallel: 1,
   supervised: false,
@@ -125,7 +121,7 @@ export type ConductorWorker = {
   key: string
   label: string
   model: string | null
-  status: 'running' | 'complete' | 'stale' | 'idle'
+  status: 'running' | 'complete' | 'stale' | 'idle' | 'waiting' | 'blocked'
   updatedAt: string | null
   displayName: string
   totalTokens: number
@@ -362,26 +358,25 @@ function loadPersistedMission(): PersistedMission | null {
   }
 }
 
+function normalizeConductorSettings(value: unknown): ConductorSettings {
+  const parsed = value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {}
+  // Drop retired model overrides and unknown keys, without changing any actual profile route.
+  return {
+    projectsDir: typeof parsed.projectsDir === 'string' ? parsed.projectsDir : DEFAULT_CONDUCTOR_SETTINGS.projectsDir,
+    maxParallel: Math.min(5, Math.max(1, typeof parsed.maxParallel === 'number' && Number.isFinite(parsed.maxParallel) ? Math.round(parsed.maxParallel) : DEFAULT_CONDUCTOR_SETTINGS.maxParallel)),
+    supervised: typeof parsed.supervised === 'boolean' ? parsed.supervised : DEFAULT_CONDUCTOR_SETTINGS.supervised,
+  }
+}
+
 function loadConductorSettings(): ConductorSettings {
   try {
-    const raw = globalThis.localStorage?.getItem(CONDUCTOR_SETTINGS_STORAGE_KEY)
-    if (!raw) return DEFAULT_CONDUCTOR_SETTINGS
-    const parsed = JSON.parse(raw) as Record<string, unknown>
-    return {
-      orchestratorModel: typeof parsed.orchestratorModel === 'string' ? parsed.orchestratorModel : DEFAULT_CONDUCTOR_SETTINGS.orchestratorModel,
-      workerModel: typeof parsed.workerModel === 'string' ? parsed.workerModel : DEFAULT_CONDUCTOR_SETTINGS.workerModel,
-      projectsDir: typeof parsed.projectsDir === 'string' ? parsed.projectsDir : DEFAULT_CONDUCTOR_SETTINGS.projectsDir,
-      maxParallel: Math.min(5, Math.max(1, typeof parsed.maxParallel === 'number' && Number.isFinite(parsed.maxParallel) ? Math.round(parsed.maxParallel) : DEFAULT_CONDUCTOR_SETTINGS.maxParallel)),
-      supervised: typeof parsed.supervised === 'boolean' ? parsed.supervised : DEFAULT_CONDUCTOR_SETTINGS.supervised,
-    }
-  } catch {
-    return DEFAULT_CONDUCTOR_SETTINGS
-  }
+    return normalizeConductorSettings(JSON.parse(globalThis.localStorage?.getItem(CONDUCTOR_SETTINGS_STORAGE_KEY) || '{}'))
+  } catch { return { ...DEFAULT_CONDUCTOR_SETTINGS } }
 }
 
 function persistConductorSettings(settings: ConductorSettings): void {
   try {
-    globalThis.localStorage?.setItem(CONDUCTOR_SETTINGS_STORAGE_KEY, JSON.stringify(settings))
+    globalThis.localStorage?.setItem(CONDUCTOR_SETTINGS_STORAGE_KEY, JSON.stringify(normalizeConductorSettings(settings)))
   } catch {
     // Ignore persistence failures.
   }
@@ -930,6 +925,8 @@ export function useConductorGateway() {
   const [selectedHistoryEntry, setSelectedHistoryEntry] = useState<MissionHistoryEntry | null>(null)
   const [conductorSettings, setConductorSettings] = useState<ConductorSettings>(() => loadConductorSettings())
   const doneRef = useRef(initialMission?.phase === 'complete')
+  // Exact message set by the latest native blocked observation, never another error source.
+  const nativeBlockerRef = useRef<string | null>(null)
   const seenToolCallRef = useRef(false)
   const historySavedRef = useRef(false)
   const lastActivityAtRef = useRef<number>(Date.now())
@@ -982,7 +979,7 @@ export function useConductorGateway() {
         .map(toWorker)
         .filter((session): session is ConductorWorker => session !== null)
         .sort((a, b) => {
-          const statusRank = { running: 0, idle: 1, complete: 2, stale: 3 }
+          const statusRank = { running: 0, idle: 1, waiting: 2, blocked: 3, complete: 4, stale: 5 }
           const rankDiff = statusRank[a.status] - statusRank[b.status]
           if (rankDiff !== 0) return rankDiff
           return new Date(b.updatedAt ?? 0).getTime() - new Date(a.updatedAt ?? 0).getTime()
@@ -1053,7 +1050,7 @@ export function useConductorGateway() {
         key: workerId,
         label: workerId,
         model: null,
-        status: isComplete ? 'complete' : isBlocked ? 'stale' : 'running',
+        status: isComplete ? 'complete' : isBlocked ? state === 'needs_input' ? 'waiting' : 'blocked' : 'running',
         updatedAt: missionUpdatedAt,
         displayName: `${workerId} · ${state}`,
         totalTokens: 0,
@@ -1063,7 +1060,7 @@ export function useConductorGateway() {
           key: workerId,
           label: workerId,
           friendlyId: workerId,
-          status: isComplete ? 'completed' : 'running',
+          status: isComplete ? 'completed' : isBlocked ? state === 'needs_input' ? 'waiting' : 'blocked' : 'running',
           model: undefined,
           lastMessage: null,
           createdAt: missionStatusQuery.data?.updatedAt ?? Date.now(),
@@ -1111,7 +1108,27 @@ export function useConductorGateway() {
       setTimeoutWarning(false)
     }
 
+    if (mission.nativeSwarm && (status === 'waiting' || status === 'blocked')) {
+      // Approval waits and explicit blockers are resumable, not successful terminal deliveries.
+      doneRef.current = false
+      setCompletedAt(null)
+      const blocker = status === 'blocked' ? mission.error || 'Native mission blocked' : null
+      nativeBlockerRef.current = blocker
+      setStreamError(blocker)
+      setPhase('running')
+      return
+    }
+    if (mission.nativeSwarm && ['queued', 'running', 'reviewing'].includes(status || '')) {
+      nativeBlockerRef.current = null
+      setStreamError(null)
+    }
+
     if (isCompletedMissionStatus(status)) {
+      // Authoritative native success supersedes only its own earlier blocker, in the same
+      // update as phase='complete', before history persistence. Other errors stay visible.
+      const obsoleteBlocker = mission.nativeSwarm ? nativeBlockerRef.current : null
+      nativeBlockerRef.current = null
+      if (obsoleteBlocker !== null) setStreamError((current) => (current === obsoleteBlocker ? null : current))
       doneRef.current = true
       setCompletedAt((value) => value ?? new Date().toISOString())
       setPhase('complete')
@@ -1119,6 +1136,7 @@ export function useConductorGateway() {
     }
 
     if (isFailedMissionStatus(status)) {
+      nativeBlockerRef.current = null
       doneRef.current = true
       setStreamError(mission.error || 'Conductor mission failed')
       setCompletedAt((value) => value ?? new Date().toISOString())
@@ -1216,6 +1234,8 @@ export function useConductorGateway() {
 
   useEffect(() => {
     if (phase !== 'running') return
+    // Managed mission status is authoritative; worker inactivity/staleness is not completion.
+    if (missionId) return
 
     const shouldCompleteImmediately = doneRef.current && workersLookComplete(workers, 8_000)
     if (shouldCompleteImmediately) {
@@ -1228,7 +1248,7 @@ export function useConductorGateway() {
     if (workers.length === 0 && !doneRef.current) return
     setPhase('complete')
     setCompletedAt((value) => value ?? new Date().toISOString())
-  }, [activeWorkers.length, phase, workers])
+  }, [activeWorkers.length, phase, workers, missionId])
 
   useEffect(() => {
     if (workers.length === 0) return
@@ -1515,7 +1535,7 @@ export function useConductorGateway() {
       const response = await fetch('/api/conductor-spawn', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ goal: trimmed, ...settings }),
+        body: JSON.stringify({ goal: trimmed, ...normalizeConductorSettings(settings) }),
       })
 
       if (!response.ok) {
@@ -1554,7 +1574,6 @@ export function useConductorGateway() {
             sessionKey: portableSessionKey,
             friendlyId: portableFriendlyId,
             prompt,
-            model: settings.orchestratorModel || undefined,
             signal: abortController.signal,
             onSessionResolved: (resolvedSessionKey) => {
               setOrchestratorSessionKey(resolvedSessionKey)
@@ -1762,6 +1781,7 @@ export function useConductorGateway() {
 
   return {
     phase,
+    missionStatus: readString(missionStatusQuery.data?.status)?.toLowerCase() ?? null,
     goal,
     orchestratorSessionKey,
     streamText,
