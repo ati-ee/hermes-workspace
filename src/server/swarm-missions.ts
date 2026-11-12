@@ -387,9 +387,25 @@ export type NativeStagePlan = (mission: SwarmMission, assignment: SwarmMissionAs
  * profile/session reservation) and only then creates AND stages it in ONE synchronous store write.
  * Any refusal throws before the write: the store is byte-unchanged and no Native boundary is crossed.
  */
-export function createAndStageNativeBatch(input: MissionInput, plan: NativeStagePlan, existingSessionAuthority?: ExistingSessionAuthority): { mission: SwarmMission; staged: Array<string> } {
+export function createAndStageNativeBatch(input: MissionInput, plan: NativeStagePlan, existingSessionAuthority?: ExistingSessionAuthority, retryNotAdmitted: ReadonlySet<string> = new Set()): { mission: SwarmMission; staged: Array<string> } {
   const store = readStore()
   const { mission } = applyMissionInput(store, input, existingSessionAuthority)
+  // An explicit same-origin operator retry is safe ONLY before a binding was persisted.
+  // Any possible submit (including UNKNOWN or a fenced refusal with a saved binding)
+  // stays immutable. Recheck the latest store and retain the same assignment/request id.
+  for (const id of retryNotAdmitted) {
+    const assignment = mission.assignments.find((item) => item.id === id)
+    const native = assignment?.native
+    if (!assignment?.sessionBinding || assignment.state !== 'blocked' || !native
+        || native.status !== 'not_admitted' || native.admissionId !== null || native.inputBinding
+        || native.requestId !== `${mission.id}:${id}` || native.sessionId !== assignment.sessionBinding.sessionId) {
+      throw new SwarmDispatchError('retry_requires_unbound_not_admitted', 409)
+    }
+    requireExistingSessionAuthority(existingSessionAuthority, assignment.sessionBinding.sessionId)
+    mission.events.push(event('continuation', 'Operator retried non-admitted preparation; same assignment/request, no previous submit', { assignmentId: id, workerId: assignment.workerId }))
+    delete assignment.native
+    assignment.state = 'queued'
+  }
   const planned: Array<[SwarmMissionAssignment, NativeAssignment]> = []
   for (const requested of input.assignments) {
     const assignment = mission.assignments.find((item) => item.workerId === requested.workerId && item.task === requested.task)
