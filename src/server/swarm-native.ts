@@ -18,7 +18,7 @@ export { requireExecutionProfile, SwarmDispatchError }
  * Needs the request-bound authority of `authorizeExistingSessions` (authenticated same-origin
  * JSON POST) and the native `idle-admission-v1` capability; otherwise nothing is stored or sent.
  */
-type NativeAssignmentRequest = { workerId: string; task: string; rationale?: string; reviewRequired?: boolean; dependsOn?: Array<string>; deliveryKind?: 'report' | 'code'; producerIntent?: SwarmMissionAssignment['producerIntent']; existingSessionId?: unknown }
+type NativeAssignmentRequest = { workerId: string; task: string; rationale?: string; reviewRequired?: boolean; dependsOn?: Array<string>; deliveryKind?: 'report' | 'code'; producerIntent?: SwarmMissionAssignment['producerIntent']; existingSessionId?: unknown; retryNotAdmitted?: boolean }
 type NativeDispatchRequest = { assignments?: unknown; missionId?: unknown; missionTitle?: unknown; workerIds?: unknown; prompt?: unknown; origin?: unknown }
 
 /**
@@ -62,6 +62,7 @@ export async function dispatchNativeAssignments(body: NativeDispatchRequest, exi
   for (const assignment of rawAssignments) {
     if (!assignment || typeof assignment.workerId !== 'string' || typeof assignment.task !== 'string' || !assignment.task.trim() || assignment.task.length > 32_000) throw new SwarmDispatchError('invalid_assignment')
     requireExecutionProfile(assignment.workerId)
+    if (assignment.retryNotAdmitted !== undefined && typeof assignment.retryNotAdmitted !== 'boolean') throw new SwarmDispatchError('invalid_retry_not_admitted')
     if (assignment.deliveryKind !== undefined && !['report', 'code'].includes(assignment.deliveryKind)) throw new SwarmDispatchError('invalid_delivery_kind')
     if (assignment.dependsOn !== undefined && (!Array.isArray(assignment.dependsOn) || assignment.dependsOn.some((id) => typeof id !== 'string'))) throw new SwarmDispatchError('invalid_dependencies')
     if (assignment.existingSessionId !== undefined) {
@@ -78,9 +79,14 @@ export async function dispatchNativeAssignments(body: NativeDispatchRequest, exi
   const explicitContinuation = assignments.every((item) => item.workerId === 'argus-developer' && typeof item.existingSessionId === 'string' && item.producerIntent === 'continuation')
   if (previous && (previous.executionMode !== 'native' || (previous.state === 'complete' && !explicitContinuation) || previous.state === 'cancelled')) throw new SwarmDispatchError('historical_mission_readonly', 409)
   const knownIds = new Set(previous?.assignments.map((item) => item.id) || [])
+  const retryIds = new Set<string>()
   for (const assignment of assignments) {
     if (assignment.dependsOn?.some((id) => !knownIds.has(id))) throw new SwarmDispatchError('unknown_dependency')
     const existing = previous?.assignments.find((item) => item.workerId === assignment.workerId && item.task === assignment.task)
+    if (assignment.retryNotAdmitted === true) {
+      if (!existing || !assignment.existingSessionId) throw new SwarmDispatchError('retry_requires_exact_existing_assignment', 409)
+      retryIds.add(existing.id)
+    }
     if (existing?.workerId === 'argus-developer' && existing.producerIntent && existing.native && !existing.native.admissionId && ['unknown', 'submitting'].includes(existing.native.status)) {
       // Never a resubmit/new key: a bound row is reconciled only by the read-only lookup on refresh;
       // a historical row without a persisted binding cannot be proved and stays UNKNOWN.
@@ -109,7 +115,7 @@ export async function dispatchNativeAssignments(body: NativeDispatchRequest, exi
       const sessionBinding = bindingOf(item)
       return { workerId: item.workerId, task: item.task, rationale: item.rationale, dependsOn: item.dependsOn, deliveryKind: item.deliveryKind ?? 'code', ...(item.producerIntent ? { producerIntent: item.producerIntent } : {}), reviewRequired: item.deliveryKind === 'report' ? false : !['argus-reviewer', 'argus-validator'].includes(item.workerId), ...(sessionBinding ? { sessionBinding } : {}) }
     }),
-  }, plan, existingSessionAuthority)
+  }, plan, existingSessionAuthority, retryIds)
   const results: Array<{ workerId: string; ok: boolean; error: string | null; delivery: 'native'; sessionId: string | null; admissionId: string | null; output: string; durationMs: number; exitCode: null }> = []
   for (const assignmentId of staged) {
     // Every staged intent gets its own receipt; nothing after a Native boundary is thrown away.
@@ -135,8 +141,8 @@ export async function dispatchNativeAssignments(body: NativeDispatchRequest, exi
     ].join('\n\n')
     try {
       const observation = binding
-        ? await submitExistingBound(mission.id, assignment.id, { ...profile, requestId, title: `ARGUS · ${mission.id} · ${assignment.id}`, text, sessionId: binding.sessionId })
-        : await callNativeBridge({ action: 'submit', ...profile, requestId, title: `ARGUS · ${mission.id} · ${assignment.id}`, text })
+        ? await submitExistingBound(mission.id, assignment.id, { ...profile, requestId, title: `ARGUS Â· ${mission.id} Â· ${assignment.id}`, text, sessionId: binding.sessionId })
+        : await callNativeBridge({ action: 'submit', ...profile, requestId, title: `ARGUS Â· ${mission.id} Â· ${assignment.id}`, text })
       recordNativeObservation(mission.id, assignment.id, observation)
     } catch {
       recordNativeObservation(mission.id, assignment.id, { error: 'native_transport_unknown; inspect existing request, do not resend' })

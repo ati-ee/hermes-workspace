@@ -1,8 +1,14 @@
 # Workspace C2/P-1 source handover and knowledge record
 
+## Live preparation recovery candidate, 2026-11-12
+
+The deployed main rejected preparation before any input binding/admission because Workspace used system Python without managed dependencies. `retryNotAdmitted: true` on the exact original assignment now supports a narrow authenticated same-origin recovery. It rechecks latest store state and preserves assignment, request and session identity. A saved input binding, any admission id, UNKNOWN, submitted or cancelled state refuses unchanged. No implicit retry or lost-ACK replay is introduced.
+
+Runtime prerequisites: enable the reviewed `ARGUS_WORKSPACE_GPU_SOURCE_ENABLED=1`, use the managed Native Python via `HERMES_NATIVE_PYTHON`, and keep a normal viewer attached to the chosen existing ordinary session during admission. No cold restore is hidden inside the bridge. Regression/build/review and real GPU acceptance pending for this candidate.
+
 ## PR2 direct blocked-to-completed correction (source candidate, not deployed)
 
-Base: actual public PR2 head `d817c110f94a694a5e0f3f584e3c7b92f752223b` (parent main `e1d37d8…`),
+Base: actual public PR2 head `d817c110f94a694a5e0f3f584e3c7b92f752223b` (parent main `e1d37d8â€¦`),
 tree `393574f8299fe9c82d5c7222868c4924ed8d850d`, byte-exact to the gen42 source unit. Root reports
 Reviewer57 closed the five PR1 findings and Root's Node26 network-none build/340 tests passed on that
 tree; those facts are not re-executed or extended here and do not qualify this new source.

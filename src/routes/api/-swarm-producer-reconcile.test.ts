@@ -8,7 +8,7 @@ import {
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import { callNativeBridge, lookupNativeInput } from '../../server/swarm-native-bridge'
+import { callNativeBridge, lookupNativeInput, prepareNativeInput } from '../../server/swarm-native-bridge'
 import {
   isAuthenticated,
   isPasswordProtectionEnabled,
@@ -141,6 +141,56 @@ const initial = () => ({
 })
 const stored = () =>
   readFileSync(join(root, '.runtime/swarm-missions.json'), 'utf8')
+it('explicitly retries only a refused preparation, preserving assignment and request identity', async () => {
+  vi.mocked(prepareNativeInput).mockResolvedValueOnce({ error: 'native_attach_failed', notAdmitted: true })
+  const first = await (await api([initial()])).json()
+  const assignmentId = first.assignments[0].id
+  expect(first.assignments[0].native).toMatchObject({ status: 'not_admitted', admissionId: null })
+  expect(callNativeBridge).not.toHaveBeenCalled()
+  const implicit = await (await api([initial()], first.missionId)).json()
+  expect(implicit.results).toEqual([])
+  expect(callNativeBridge).not.toHaveBeenCalled()
+  vi.mocked(callNativeBridge).mockResolvedValueOnce(observation())
+  const response = await api([{ ...initial(), retryNotAdmitted: true }], first.missionId)
+  expect(response.status).toBe(200)
+  const retry = await response.json()
+  expect(retry.assignments).toHaveLength(1)
+  expect(retry.assignments[0]).toMatchObject({ id: assignmentId, native: { admissionId: 'synthetic-v1' } })
+  expect(callNativeBridge).toHaveBeenCalledTimes(1)
+  expect(vi.mocked(callNativeBridge).mock.calls[0][0].requestId).toBe(`${first.missionId}:${assignmentId}`)
+})
+
+it.each(['unknown', 'submitting', 'queued', 'started', 'terminal', 'bound_not_admitted', 'admitted_not_admitted', 'cancelled'])(
+  'refuses explicit preparation retry for %s without changing the store or calling Native', async (kind) => {
+    vi.mocked(prepareNativeInput).mockResolvedValueOnce({ error: 'native_attach_failed', notAdmitted: true })
+    const first = await (await api([initial()])).json()
+    const store = JSON.parse(stored())
+    const assignment = store.missions[0].assignments[0]
+    if (kind === 'cancelled') assignment.state = 'cancelled'
+    else if (kind === 'bound_not_admitted') assignment.native.inputBinding = { saved: 'must stay immutable' }
+    else if (kind === 'admitted_not_admitted') assignment.native.admissionId = 'already-admitted'
+    else assignment.native.status = kind
+    writeFileSync(join(root, '.runtime/swarm-missions.json'), JSON.stringify(store))
+    const before = stored()
+    const response = await api([{ ...initial(), retryNotAdmitted: true }], first.missionId)
+    expect(response.status).toBe(409)
+    expect(stored()).toBe(before)
+    expect(callNativeBridge).not.toHaveBeenCalled()
+  },
+)
+
+it('requires an exact existing assignment and authenticated same-origin authority for retry', async () => {
+  expect((await api([{ ...initial(), retryNotAdmitted: true }])).status).toBe(409)
+  vi.mocked(prepareNativeInput).mockResolvedValueOnce({ error: 'native_attach_failed', notAdmitted: true })
+  const first = await (await api([initial()])).json()
+  const before = stored()
+  expect((await api([{ ...initial(), retryNotAdmitted: true }], first.missionId, 'http://other.invalid')).status).toBe(403)
+  vi.mocked(isAuthenticated).mockReturnValue(false)
+  expect((await api([{ ...initial(), retryNotAdmitted: true }], first.missionId)).status).toBe(401)
+  expect(stored()).toBe(before)
+  expect(callNativeBridge).not.toHaveBeenCalled()
+})
+
 it('admits an explicit INITIAL producer in the selected session through the real API/store, never creates a session', async () => {
   vi.mocked(callNativeBridge).mockResolvedValueOnce(observation())
   const response = await api([initial()])
